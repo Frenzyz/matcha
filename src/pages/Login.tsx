@@ -33,7 +33,7 @@ export default function Login() {
           <GraduationCap className="text-emerald-600" size={48} />
         </div>
         <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-          Welcome to UNCC Mentor
+          Welcome to Matcha
         </h2>
         <p className="mt-2 text-center text-sm text-gray-600">
           Your personalized academic assistant
