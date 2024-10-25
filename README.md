@@ -61,10 +61,9 @@ Follow these steps carefully to set up your development environment:
 ### 1. Clone the Repository
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/uncc-mentor.git
-
+git clone https://github.com/Frenzyz/matcha
 # Navigate to project directory
-cd uncc-mentor
+cd matcha
 ```
 
 ### 2. Install Dependencies
