@@ -10,7 +10,8 @@ const colorThemes = [
   { name: 'emerald', color: '#10B981' },
   { name: 'blue', color: '#3B82F6' },
   { name: 'purple', color: '#8B5CF6' },
-  { name: 'pink', color: '#EC4899' }
+  { name: 'pink', color: '#EC4899' },
+  { name: 'orange', color: '#F973316'}
 ];
 
 export default function Settings() {
