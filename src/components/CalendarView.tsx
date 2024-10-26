@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Event } from '../types';
+import { useThemeStore } from '../store/themeStore';
 
 interface CalendarViewProps {
   events: Event[];
@@ -8,6 +9,7 @@ interface CalendarViewProps {
 
 export default function CalendarView({ events }: CalendarViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
+  const { isDarkMode } = useThemeStore();
 
   const daysInMonth = new Date(
     currentDate.getFullYear(),
@@ -44,7 +46,7 @@ export default function CalendarView({ events }: CalendarViewProps) {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow p-4">
+    <div className={`rounded-lg shadow p-4 ${isDarkMode ? 'bg-gray-800 text-white' : 'bg-white'}`}>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold">
           {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
@@ -78,7 +80,7 @@ export default function CalendarView({ events }: CalendarViewProps) {
         {previousMonthDays.map(day => (
           <div
             key={`prev-${day}`}
-            className="h-24 p-1 border border-gray-100 bg-gray-50"
+            className={`h-24 p-1 border ${isDarkMode ? 'border-gray-700 bg-gray-900' : 'border-gray-100 bg-gray-50'}`}
           />
         ))}
 
@@ -92,9 +94,7 @@ export default function CalendarView({ events }: CalendarViewProps) {
           return (
             <div
               key={day}
-              className={`h-24 p-1 border border-gray-100 ${
-                isToday ? 'bg-emerald-50' : ''
-              }`}
+              className={`h-24 p-1 border ${isDarkMode ? 'border-gray-700' : 'border-gray-100'} ${isToday ? 'bg-emerald-50' : ''}`}
             >
               <div className={`text-sm ${isToday ? 'font-bold text-emerald-600' : ''}`}>
                 {day}
