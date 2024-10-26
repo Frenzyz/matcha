@@ -38,44 +38,48 @@ export default function Onboarding() {
   const [currentStep, setCurrentStep] = useState(0);
   const { setPrimaryColor } = useThemeStore();
   const { user } = useAuth();
+  const [calendarConnected, setCalendarConnected] = useState(false);
   const [formData, setFormData] = useState({
     major: '',
-    interests: '',
-    goals: ''
+    interests: ''
   });
-  const [calendarConnected, setCalendarConnected] = useState(false);
 
   const handleComplete = async () => {
     if (!user) return;
 
     try {
-      const { error } = await supabase
+      // Update user profile
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({
+          setup_completed: true,
+          last_seen: new Date().toISOString()
+        })
+        .eq('id', user.id);
+
+      if (profileError) throw profileError;
+
+      // Save user preferences
+      const { error: prefError } = await supabase
         .from('user_preferences')
         .insert([{
           user_id: user.id,
           major: formData.major,
           interests: formData.interests,
-          goals: formData.goals,
           created_at: new Date().toISOString()
         }]);
 
-      if (error) throw error;
+      if (prefError) throw prefError;
 
-      // Mark setup as completed
-      await supabase
-        .from('profiles')
-        .update({ setup_completed: true })
-        .eq('id', user.id);
-
-      navigate('/');
+      // Navigate to dashboard
+      navigate('/', { replace: true });
     } catch (err) {
-      console.error('Error saving preferences:', err);
+      console.error('Error completing onboarding:', err);
     }
   };
 
   const handleGoogleSuccess = async (token: string) => {
     setCalendarConnected(true);
-    // Optionally store the token in your user preferences
   };
 
   const handleGoogleError = (error: Error) => {
