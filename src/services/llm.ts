@@ -1,100 +1,101 @@
-import { CreateMLCEngine, MLCEngine } from '@mlc-ai/web-llm';
+import { ChatCompletionMessage, ChatCompletionResponse } from './types';
 
 export class LLMService {
-  private engine: MLCEngine | null = null;
-  private initPromise: Promise<void> | null = null;
+  private baseUrl: string = 'http://cci-llm.charlotte.edu/api/v1';
+  private apiKey: string = 'OnuR-l5IlfYqF8HYoTOYHAcHOXCgL5xASQM5ooGHG6A';
+  private model: string = 'Llama-2-70B';
 
-  async initialize(progressCallback?: (progress: any) => void) {
-    if (this.initPromise) return this.initPromise;
+  private async makeRequest(messages: ChatCompletionMessage[]): Promise<string> {
+    try {
+      const response = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`
+        },
+        body: JSON.stringify({
+          model: this.model,
+          messages,
+          max_tokens: 300,
+          temperature: 0
+        })
+      });
 
-    this.initPromise = new Promise(async (resolve, reject) => {
-      try {
-        this.engine = await CreateMLCEngine(
-          "Llama-2-7b-chat-q4f32_1",
-          { 
-            initProgressCallback: progressCallback,
-            required_features: ["shader-f16"],
-            modelBaseUrl: "https://huggingface.co/mlc-ai/mlc-chat-Llama-2-7b-chat-q4f32_1/resolve/main/",
-            wasmUrl: "https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.73/dist/"
-          }
-        );
-
-        await this.setSystemPrompt();
-        resolve();
-      } catch (error) {
-        this.initPromise = null;
-        reject(error);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error?.message || `HTTP error! status: ${response.status}`);
       }
-    });
 
-    return this.initPromise;
+      const data = await response.json() as ChatCompletionResponse;
+      
+      if (!data.choices?.[0]?.message?.content) {
+        throw new Error('Invalid response format from LLM service');
+      }
+
+      return data.choices[0].message.content;
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`LLM service error: ${error.message}`);
+      }
+      throw new Error('An unexpected error occurred while communicating with the LLM service');
+    }
   }
 
-  private async setSystemPrompt() {
-    if (!this.engine) throw new Error('Engine not initialized');
-    
-    await this.engine.chat.completions.create({
-      messages: [{
-        role: "system",
+  async generate(prompt: string): Promise<string> {
+    if (!prompt.trim()) {
+      throw new Error('Prompt cannot be empty');
+    }
+
+    const messages: ChatCompletionMessage[] = [
+      {
+        role: 'system',
         content: `You are an AI academic assistant for UNCC students. You help with:
                  - Course planning and scheduling
                  - Assignment tracking and reminders
                  - Study tips and resources
                  - Campus event recommendations
                  Always be helpful, accurate, and encouraging.`
-      }]
-    });
-  }
-
-  async generate(prompt: string): Promise<string> {
-    if (!this.engine) throw new Error('Engine not initialized');
-    
-    const response = await this.engine.chat.completions.create({
-      messages: [{
-        role: "user",
+      },
+      {
+        role: 'user',
         content: prompt
-      }],
-      temperature: 0.7,
-      max_tokens: 1000,
-      top_p: 0.95
-    });
+      }
+    ];
 
-    return response.choices[0].message.content;
+    return this.makeRequest(messages);
   }
 
   async generateStream(prompt: string, onChunk: (text: string) => void): Promise<void> {
-    if (!this.engine) throw new Error('Engine not initialized');
-    
-    const chunks = await this.engine.chat.completions.create({
-      messages: [{
-        role: "user",
-        content: prompt
-      }],
-      temperature: 0.7,
-      max_tokens: 1000,
-      top_p: 0.95,
-      stream: true
-    });
+    if (!prompt.trim()) {
+      throw new Error('Prompt cannot be empty');
+    }
 
-    for await (const chunk of chunks) {
-      const content = chunk.choices[0]?.delta?.content;
-      if (content) {
-        onChunk(content);
+    try {
+      const response = await this.generate(prompt);
+      
+      if (!response) {
+        throw new Error('Empty response from LLM service');
       }
+
+      // Simulate streaming by splitting the response into words
+      const words = response.split(' ');
+      
+      for (const word of words) {
+        onChunk(word + ' ');
+        // Add a small delay between words to simulate streaming
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`Stream generation error: ${error.message}`);
+      }
+      throw new Error('An unexpected error occurred during stream generation');
     }
   }
 
-  async reset() {
-    if (!this.engine) throw new Error('Engine not initialized');
-    await this.engine.resetChat();
-    await this.setSystemPrompt();
-  }
-
-  unload() {
-    if (this.engine) {
-      this.engine = null;
-      this.initPromise = null;
-    }
+  async reset(): Promise<void> {
+    // No state to reset with this implementation
+    return Promise.resolve();
   }
 }
 

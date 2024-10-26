@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useThemeStore } from '../store/themeStore';
-import { useWebLLM } from '../hooks/useWebLLM';
+import { useChat } from '../hooks/useChat';
 import ChatMessage from './ChatMessage';
 import ChatInput from './ChatInput';
-import LoadingState from './LoadingState';
+import ErrorMessage from './ErrorMessage';
 
 export default function ChatBot() {
   const [messages, setMessages] = useState<Array<{ text: string; isBot: boolean }>>([
@@ -11,7 +11,7 @@ export default function ChatBot() {
   ]);
   const [input, setInput] = useState('');
   const { isDarkMode } = useThemeStore();
-  const { generateResponse, loading, error, initialized, initProgress } = useWebLLM();
+  const { generateStreamResponse, loading, error, clearError } = useChat();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -19,26 +19,45 @@ export default function ChatBot() {
   }, [messages]);
 
   const handleSend = async () => {
-    if (!input.trim() || loading || !initialized) return;
+    if (!input.trim() || loading) return;
 
-    const userMessage = input;
+    const userMessage = input.trim();
     setMessages(prev => [...prev, { text: userMessage, isBot: false }]);
     setInput('');
+    clearError();
 
     try {
-      const response = await generateResponse(userMessage);
-      setMessages(prev => [...prev, { text: response, isBot: true }]);
+      let fullResponse = '';
+      await generateStreamResponse(
+        userMessage,
+        (chunk) => {
+          fullResponse += chunk;
+          setMessages(prev => {
+            const newMessages = [...prev];
+            if (newMessages[newMessages.length - 1]?.isBot) {
+              newMessages[newMessages.length - 1].text = fullResponse;
+            } else {
+              newMessages.push({ text: fullResponse, isBot: true });
+            }
+            return newMessages;
+          });
+        }
+      );
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
       setMessages(prev => [...prev, { 
-        text: "I'm having trouble responding right now. Please try again later.", 
+        text: `I apologize, but I'm having trouble responding right now. ${errorMessage}`, 
         isBot: true 
       }]);
     }
   };
 
-  if (!initialized) {
-    return <LoadingState initProgress={initProgress} />;
-  }
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
 
   return (
     <div className={`flex flex-col h-[calc(100vh-5rem)] ${isDarkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow-sm ml-64`}>
@@ -53,9 +72,10 @@ export default function ChatBot() {
         ))}
         <div ref={messagesEndRef} />
         {error && (
-          <div className="text-red-500 text-center p-2">
-            {error}
-          </div>
+          <ErrorMessage 
+            message={error}
+            onDismiss={clearError}
+          />
         )}
       </div>
 
@@ -63,8 +83,10 @@ export default function ChatBot() {
         input={input}
         setInput={setInput}
         onSend={handleSend}
+        onKeyPress={handleKeyPress}
         loading={loading}
         isDarkMode={isDarkMode}
+        disabled={loading}
       />
     </div>
   );

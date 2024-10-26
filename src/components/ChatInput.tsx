@@ -5,32 +5,43 @@ interface ChatInputProps {
   input: string;
   setInput: (value: string) => void;
   onSend: () => void;
+  onKeyPress: (e: React.KeyboardEvent) => void;
   loading: boolean;
   isDarkMode: boolean;
+  disabled?: boolean;
 }
 
-export default function ChatInput({ input, setInput, onSend, loading, isDarkMode }: ChatInputProps) {
+export default function ChatInput({
+  input,
+  setInput,
+  onSend,
+  onKeyPress,
+  loading,
+  isDarkMode,
+  disabled
+}: ChatInputProps) {
   return (
-    <div className="p-4 border-t">
+    <div className="p-4 border-t dark:border-gray-700">
       <div className="flex gap-2">
-        <input
-          type="text"
+        <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && onSend()}
+          onKeyPress={onKeyPress}
           placeholder="Ask me anything about your academic journey..."
-          className={`flex-1 p-2 rounded-lg border ${
+          className={`flex-1 p-2 rounded-lg border resize-none ${
             isDarkMode 
-              ? 'bg-gray-700 border-gray-600 text-white' 
-              : 'bg-white border-gray-300'
-          }`}
-          disabled={loading}
+              ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
+              : 'bg-white border-gray-300 placeholder-gray-500'
+          } focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent`}
+          disabled={disabled}
+          rows={1}
+          style={{ minHeight: '42px', maxHeight: '120px' }}
         />
         <button
           onClick={onSend}
-          disabled={loading || !input.trim()}
-          className={`p-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors ${
-            (loading || !input.trim()) ? 'opacity-50 cursor-not-allowed' : ''
+          disabled={loading || !input.trim() || disabled}
+          className={`p-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors flex-shrink-0 ${
+            (loading || !input.trim() || disabled) ? 'opacity-50 cursor-not-allowed' : ''
           }`}
         >
           {loading ? (

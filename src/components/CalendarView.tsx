@@ -46,21 +46,29 @@ export default function CalendarView({ events }: CalendarViewProps) {
   };
 
   return (
-    <div className={`rounded-lg shadow p-4 ${isDarkMode ? 'bg-gray-800 text-white' : 'bg-white'}`}>
+    <div className={`rounded-lg shadow p-4 ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">
+        <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
           {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
         </h2>
         <div className="flex gap-2">
           <button
             onClick={previousMonth}
-            className="p-2 hover:bg-gray-100 rounded-full"
+            className={`p-2 rounded-full ${
+              isDarkMode 
+                ? 'hover:bg-gray-700 text-gray-300' 
+                : 'hover:bg-gray-100 text-gray-600'
+            }`}
           >
             <ChevronLeft size={20} />
           </button>
           <button
             onClick={nextMonth}
-            className="p-2 hover:bg-gray-100 rounded-full"
+            className={`p-2 rounded-full ${
+              isDarkMode 
+                ? 'hover:bg-gray-700 text-gray-300' 
+                : 'hover:bg-gray-100 text-gray-600'
+            }`}
           >
             <ChevronRight size={20} />
           </button>
@@ -71,7 +79,9 @@ export default function CalendarView({ events }: CalendarViewProps) {
         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
           <div
             key={day}
-            className="text-center text-sm font-medium text-gray-500 py-2"
+            className={`text-center text-sm font-medium py-2 ${
+              isDarkMode ? 'text-gray-400' : 'text-gray-500'
+            }`}
           >
             {day}
           </div>
@@ -80,7 +90,11 @@ export default function CalendarView({ events }: CalendarViewProps) {
         {previousMonthDays.map(day => (
           <div
             key={`prev-${day}`}
-            className={`h-24 p-1 border ${isDarkMode ? 'border-gray-700 bg-gray-900' : 'border-gray-100 bg-gray-50'}`}
+            className={`h-24 p-1 border ${
+              isDarkMode 
+                ? 'border-gray-700 bg-gray-900' 
+                : 'border-gray-100 bg-gray-50'
+            }`}
           />
         ))}
 
@@ -94,21 +108,35 @@ export default function CalendarView({ events }: CalendarViewProps) {
           return (
             <div
               key={day}
-              className={`h-24 p-1 border ${isDarkMode ? 'border-gray-700' : 'border-gray-100'} ${isToday ? 'bg-emerald-50' : ''}`}
+              className={`h-24 p-1 border ${
+                isDarkMode
+                  ? `border-gray-700 ${isToday ? 'bg-emerald-900/20' : 'hover:bg-gray-700/50'}`
+                  : `border-gray-100 ${isToday ? 'bg-emerald-50' : 'hover:bg-gray-50'}`
+              }`}
             >
-              <div className={`text-sm ${isToday ? 'font-bold text-emerald-600' : ''}`}>
+              <div className={`text-sm ${
+                isToday 
+                  ? 'font-bold text-emerald-600' 
+                  : isDarkMode ? 'text-gray-300' : 'text-gray-700'
+              }`}>
                 {day}
               </div>
               <div className="mt-1 space-y-1">
-                {dayEvents.map((event, index) => (
+                {dayEvents.map((event) => (
                   <div
                     key={event.id}
                     className={`text-xs truncate px-1 py-0.5 rounded ${
                       event.type === 'academic'
-                        ? 'bg-emerald-100 text-emerald-700'
+                        ? isDarkMode 
+                          ? 'bg-emerald-900/50 text-emerald-300' 
+                          : 'bg-emerald-100 text-emerald-700'
                         : event.type === 'career'
-                        ? 'bg-blue-100 text-blue-700'
-                        : 'bg-purple-100 text-purple-700'
+                        ? isDarkMode
+                          ? 'bg-blue-900/50 text-blue-300'
+                          : 'bg-blue-100 text-blue-700'
+                        : isDarkMode
+                          ? 'bg-purple-900/50 text-purple-300'
+                          : 'bg-purple-100 text-purple-700'
                     }`}
                   >
                     {event.title}

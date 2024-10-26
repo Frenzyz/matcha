@@ -6,10 +6,9 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
-import Onboarding from './components/Onboarding';
 import ChatBot from './components/ChatBot';
 import TimeAnalysis from './components/TimeAnalysis';
-import CanvasUrlPrompt from './components/CanvasUrlPrompt';
+import Scholarships from './pages/Scholarships';
 import { useUser } from './hooks/useUser';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -28,11 +27,6 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" />;
   }
 
-  // Redirect to Canvas URL prompt if not set up
-  if (userData && !userData.setup_completed && !window.location.pathname.includes('/canvas-setup')) {
-    return <Navigate to="/canvas-setup" />;
-  }
-
   return <Layout>{children}</Layout>;
 }
 
@@ -43,20 +37,6 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
-          <Route path="/canvas-setup" element={
-            <PrivateRoute>
-              <div className="page-transition">
-                <CanvasUrlPrompt />
-              </div>
-            </PrivateRoute>
-          } />
-          <Route path="/onboarding" element={
-            <PrivateRoute>
-              <div className="page-transition">
-                <Onboarding />
-              </div>
-            </PrivateRoute>
-          } />
           <Route path="/" element={
             <PrivateRoute>
               <div className="page-transition">
@@ -75,6 +55,13 @@ function App() {
             <PrivateRoute>
               <div className="page-transition">
                 <TimeAnalysis />
+              </div>
+            </PrivateRoute>
+          } />
+          <Route path="/scholarships" element={
+            <PrivateRoute>
+              <div className="page-transition">
+                <Scholarships />
               </div>
             </PrivateRoute>
           } />

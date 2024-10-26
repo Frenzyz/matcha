@@ -108,7 +108,7 @@ export class CalendarService {
             updated_at: new Date().toISOString()
           },
           {
-            onConflict: 'unique_google_event'
+            onConflict: 'user_id,google_event_id'
           }
         );
 
