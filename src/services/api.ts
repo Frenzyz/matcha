@@ -1,3 +1,4 @@
+import { supabase } from '../config/supabase';
 import { Event, Assignment } from '../types';
 
 const API_BASE_URL = 'https://canvas.instructure.com/api/v1';
@@ -13,8 +14,11 @@ export async function fetchAssignments(token: string): Promise<Assignment[]> {
 }
 
 export async function fetchEvents(): Promise<Event[]> {
-  // Implement fetching from multiple UNCC sources
-  // This would need to be implemented on a backend service
-  // to handle CORS and API authentication
-  return [];
+  const { data, error } = await supabase
+    .from('events')
+    .select('*')
+    .order('start_time', { ascending: true });
+
+  if (error) throw error;
+  return data || [];
 }

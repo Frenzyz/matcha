@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GraduationCap, Palette } from 'lucide-react';
 import { useThemeStore } from '../store/themeStore';
+import { supabase } from '../config/supabase';
+import { useAuth } from '../context/AuthContext';
 
 interface OnboardingStep {
   title: string;
@@ -34,15 +36,32 @@ export default function Onboarding() {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
   const { setPrimaryColor } = useThemeStore();
+  const { user } = useAuth();
   const [formData, setFormData] = useState({
     major: '',
     interests: '',
     goals: ''
   });
 
-  const handleComplete = () => {
-    // Save user preferences
-    navigate('/');
+  const handleComplete = async () => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('user_preferences')
+        .insert([{
+          user_id: user.id,
+          major: formData.major,
+          interests: formData.interests,
+          goals: formData.goals,
+          created_at: new Date().toISOString()
+        }]);
+
+      if (error) throw error;
+      navigate('/');
+    } catch (err) {
+      console.error('Error saving preferences:', err);
+    }
   };
 
   return (

@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Save, Key, Palette, Moon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useThemeStore } from '../store/themeStore';
-import { useFirestore } from '../hooks/useFirestore';
 import { useConnection } from '../hooks/useConnection';
-import ConnectionStatus from '../components/ConnectionStatus';
+import { supabase, retryOperation } from '../config/supabase';
+import ConnectionStatus from './ConnectionStatus';
 
 const colorThemes = [
   { name: 'emerald', color: '#10B981', label: 'Emerald' },
@@ -16,11 +16,11 @@ const colorThemes = [
 export default function Settings() {
   const { user } = useAuth();
   const { setPrimaryColor, primaryColor, isDarkMode, toggleDarkMode } = useThemeStore();
-  const { getData, setData, loading: isSaving, error: saveError } = useFirestore();
   const [calendarUrl, setCalendarUrl] = useState('');
   const [hasExistingCalendar, setHasExistingCalendar] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const isOnline = useConnection();
 
   useEffect(() => {
@@ -29,14 +29,23 @@ export default function Settings() {
 
       try {
         setIsLoading(true);
-        const userData = await getData('users', user.uid);
-        if (userData) {
-          setHasExistingCalendar(!!userData.calendarUrl);
-          if (userData.calendarUrl) {
-            setCalendarUrl(userData.calendarUrl);
+        const { data, error } = await retryOperation(async () =>
+          supabase
+            .from('profiles')
+            .select('canvas_calendar_url, theme_color')
+            .eq('id', user.id)
+            .single()
+        );
+
+        if (error) throw error;
+
+        if (data) {
+          setHasExistingCalendar(!!data.canvas_calendar_url);
+          if (data.canvas_calendar_url) {
+            setCalendarUrl(data.canvas_calendar_url);
           }
-          if (userData.themeColor) {
-            setPrimaryColor(userData.themeColor);
+          if (data.theme_color) {
+            setPrimaryColor(data.theme_color);
           }
         }
       } catch (error) {
@@ -52,13 +61,20 @@ export default function Settings() {
     };
 
     fetchUserSettings();
-  }, [user, getData, isOnline, setPrimaryColor]);
+  }, [user, isOnline, setPrimaryColor]);
 
   const handleColorChange = async (color: string) => {
     setPrimaryColor(color);
     if (user && isOnline) {
       try {
-        await setData('users', user.uid, { themeColor: color });
+        const { error } = await retryOperation(async () =>
+          supabase
+            .from('profiles')
+            .update({ theme_color: color })
+            .eq('id', user.id)
+        );
+
+        if (error) throw error;
         setMessage({ type: 'success', text: 'Theme color updated!' });
       } catch (error) {
         setMessage({ type: 'error', text: 'Failed to save theme preference' });
@@ -71,11 +87,19 @@ export default function Settings() {
     if (!user) return;
 
     try {
-      await setData('users', user.uid, {
-        calendarUrl,
-        themeColor: primaryColor,
-        lastModified: Date.now()
-      });
+      setIsSaving(true);
+      const { error } = await retryOperation(async () =>
+        supabase
+          .from('profiles')
+          .update({
+            canvas_calendar_url: calendarUrl,
+            theme_color: primaryColor,
+            last_seen: new Date().toISOString()
+          })
+          .eq('id', user.id)
+      );
+
+      if (error) throw error;
 
       setMessage({ 
         type: 'success', 
@@ -85,12 +109,12 @@ export default function Settings() {
       });
       setHasExistingCalendar(true);
     } catch (error) {
-      if (error instanceof Error && error.message !== 'Offline') {
-        setMessage({ 
-          type: 'error', 
-          text: 'Failed to save settings. Please try again.'
-        });
-      }
+      setMessage({ 
+        type: 'error', 
+        text: 'Failed to save settings. Please try again.'
+      });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -175,11 +199,11 @@ export default function Settings() {
                 </p>
               </div>
 
-              {(message.text || saveError) && (
+              {message.text && (
                 <div className={`p-4 rounded-md ${
                   message.type === 'success' ? 'bg-theme-light text-theme-primary' : 'bg-red-50 text-red-800'
                 }`}>
-                  {saveError || message.text}
+                  {message.text}
                 </div>
               )}
 

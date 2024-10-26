@@ -1,8 +1,7 @@
 import React from 'react';
 import { Palette } from 'lucide-react';
 import { useThemeStore } from '../store/themeStore';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { supabase } from '../config/supabase';
 import { useAuth } from '../context/AuthContext';
 
 interface ColorTheme {
@@ -46,9 +45,14 @@ export default function ColorPicker() {
   const handleColorChange = async (theme: ColorTheme) => {
     setPrimaryColor(theme.name);
     if (user) {
-      await updateDoc(doc(db, 'users', user.uid), {
-        themeColor: theme.name
-      });
+      const { error } = await supabase
+        .from('users')
+        .update({ theme_color: theme.name })
+        .eq('id', user.id);
+
+      if (error) {
+        console.error('Error updating theme:', error);
+      }
     }
   };
 

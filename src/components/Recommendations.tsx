@@ -1,35 +1,31 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { MapPin, Clock, Users } from 'lucide-react';
+import { supabase } from '../config/supabase';
+import { Event } from '../types';
 
 export default function Recommendations() {
-  const events = [
-    {
-      title: "Career Fair: Tech & Engineering",
-      location: "Student Union",
-      time: "2:00 PM - 5:00 PM",
-      attendees: 120,
-      type: "career"
-    },
-    {
-      title: "Study Skills Workshop",
-      location: "Atkins Library",
-      time: "3:30 PM - 4:30 PM",
-      attendees: 45,
-      type: "academic"
-    },
-    {
-      title: "Wellness Wednesday: Yoga",
-      location: "UREC",
-      time: "5:00 PM - 6:00 PM",
-      attendees: 30,
-      type: "wellness"
-    }
-  ];
+  const [events, setEvents] = useState<Event[]>([]);
+
+  useEffect(() => {
+    const fetchEvents = async () => {
+      const { data, error } = await supabase
+        .from('events')
+        .select('*')
+        .order('start_time', { ascending: true })
+        .limit(3);
+
+      if (!error && data) {
+        setEvents(data);
+      }
+    };
+
+    fetchEvents();
+  }, []);
 
   return (
     <div className="space-y-4">
-      {events.map((event, index) => (
-        <div key={index} className="p-4 rounded-lg border border-gray-100 hover:border-emerald-200 transition-colors">
+      {events.map((event) => (
+        <div key={event.id} className="p-4 rounded-lg border border-gray-100 hover:border-emerald-200 transition-colors">
           <h3 className="font-semibold text-gray-800 mb-2">{event.title}</h3>
           
           <div className="space-y-2 text-sm text-gray-600">
@@ -40,7 +36,7 @@ export default function Recommendations() {
             
             <div className="flex items-center gap-2">
               <Clock size={16} />
-              <span>{event.time}</span>
+              <span>{new Date(event.start_time).toLocaleTimeString()}</span>
             </div>
             
             <div className="flex items-center gap-2">

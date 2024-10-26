@@ -1,17 +1,10 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-  User as FirebaseUser
-} from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
-import { auth, db, validateEmail } from '../config/firebase';
+import * as React from 'react';
+import { User } from '@supabase/supabase-js';
+import { supabase, validateEmail, parseSupabaseError } from '../config/supabase';
 
 interface AuthContextType {
   isAuthenticated: boolean;
-  user: FirebaseUser | null;
+  user: User | null;
   login: (credentials: LoginCredentials) => Promise<void>;
   signup: (credentials: SignupCredentials) => Promise<void>;
   logout: () => Promise<void>;
@@ -29,55 +22,86 @@ interface SignupCredentials extends LoginCredentials {
   studentId: string;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = React.createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<FirebaseUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = React.useState<User | null>(null);
+  const [loading, setLoading] = React.useState(true);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
+  React.useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
       setLoading(false);
     });
 
-    return unsubscribe;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      setLoading(false);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signup = async (credentials: SignupCredentials) => {
-    if (!validateEmail(credentials.email)) {
-      throw new Error('Please use your @charlotte.edu email address');
+    try {
+      if (!validateEmail(credentials.email)) {
+        throw new Error('Please use your UNCC email address (@charlotte.edu or @uncc.edu)');
+      }
+
+      const { data, error } = await supabase.auth.signUp({
+        email: credentials.email,
+        password: credentials.password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          data: {
+            first_name: credentials.firstName,
+            last_name: credentials.lastName,
+            student_id: credentials.studentId
+          }
+        }
+      });
+
+      if (error) throw error;
+      if (!data.user) throw new Error('Signup failed');
+
+    } catch (error) {
+      throw new Error(parseSupabaseError(error));
     }
-
-    const userCredential = await createUserWithEmailAndPassword(
-      auth,
-      credentials.email,
-      credentials.password
-    );
-
-    await setDoc(doc(db, 'users', userCredential.user.uid), {
-      firstName: credentials.firstName,
-      lastName: credentials.lastName,
-      studentId: credentials.studentId,
-      email: credentials.email,
-      createdAt: new Date().toISOString()
-    });
   };
 
   const login = async (credentials: LoginCredentials) => {
-    if (!validateEmail(credentials.email)) {
-      throw new Error('Please use your @charlotte.edu email address');
-    }
+    try {
+      if (!validateEmail(credentials.email)) {
+        throw new Error('Please use your UNCC email address (@charlotte.edu or @uncc.edu)');
+      }
 
-    await signInWithEmailAndPassword(
-      auth,
-      credentials.email,
-      credentials.password
-    );
+      const { error } = await supabase.auth.signInWithPassword({
+        email: credentials.email,
+        password: credentials.password
+      });
+
+      if (error) throw error;
+    } catch (error) {
+      throw new Error(parseSupabaseError(error));
+    }
   };
 
   const logout = async () => {
-    await signOut(auth);
+    try {
+      if (user) {
+        await supabase
+          .from('profiles')
+          .update({ last_seen: new Date().toISOString() })
+          .eq('id', user.id);
+      }
+      
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+    } catch (error) {
+      throw new Error(parseSupabaseError(error));
+    }
   };
 
   const value = {
@@ -97,7 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
+  const context = React.useContext(AuthContext);
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }

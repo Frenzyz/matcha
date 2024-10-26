@@ -8,8 +8,12 @@ export default {
   theme: {
     extend: {
       colors: {
-        primary: 'var(--color-primary)',
-      },
+        theme: {
+          primary: 'var(--color-primary)',
+          hover: 'var(--color-primary-hover)',
+          light: 'var(--color-primary-light)'
+        }
+      }
     },
   },
   plugins: [],

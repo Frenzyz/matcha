@@ -1,91 +1,120 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
+import { Calendar as CalendarIcon, Download, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { CalendarService } from '../services/calendar';
+import { Event } from '../types';
+import CalendarEvent from './CalendarEvent';
+import ErrorMessage from './ErrorMessage';
+import LoadingSpinner from './LoadingSpinner';
+import GoogleCalendarButton from './GoogleCalendarButton';
 
-interface CanvasEvent {
-  id: string;
-  title: string;
-  start_at: string;
-  end_at: string;
-  location_name?: string;
-}
-
-export default function EventCalendar() {
-  const [events, setEvents] = useState<CanvasEvent[]>([]);
+export default function Calendar() {
+  const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [googleToken, setGoogleToken] = useState<string | null>(null);
   const { user } = useAuth();
-  
+
   useEffect(() => {
-    const fetchCanvasEvents = async () => {
-      if (!user) return;
+    let mounted = true;
+
+    const fetchEvents = async () => {
+      if (!user?.id) {
+        setError('Please log in to view your calendar');
+        setLoading(false);
+        return;
+      }
 
       try {
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (!userDoc.exists()) return;
-
-        const canvasToken = userDoc.data().canvasToken;
-        if (!canvasToken) {
-          setError('Please configure your Canvas API token in settings');
-          setLoading(false);
-          return;
+        setError(null);
+        const fetchedEvents = await CalendarService.fetchEvents(user.id, googleToken);
+        
+        if (mounted) {
+          setEvents(fetchedEvents);
         }
-
-        const response = await fetch('https://uncc.instructure.com/api/v1/calendar_events', {
-          headers: {
-            'Authorization': `Bearer ${canvasToken}`
-          }
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to fetch Canvas events');
-        }
-
-        const data = await response.json();
-        setEvents(data);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load calendar events');
+        if (mounted) {
+          const errorMessage = err instanceof Error ? err.message : 'Failed to load calendar events';
+          setError(errorMessage);
+          console.error('Calendar fetch error:', err);
+        }
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
-    fetchCanvasEvents();
-  }, [user]);
+    fetchEvents();
+
+    return () => {
+      mounted = false;
+    };
+  }, [user, googleToken]);
+
+  const handleGoogleSuccess = (token: string) => {
+    setGoogleToken(token);
+    setLoading(true);
+  };
+
+  const handleGoogleError = (error: Error) => {
+    console.error('Google Calendar error:', error);
+    setError('Failed to connect to Google Calendar');
+  };
+
+  const handleDownload = () => {
+    if (events.length === 0) return;
+    
+    try {
+      CalendarService.downloadCalendar(events);
+    } catch (err) {
+      console.error('Download error:', err);
+      setError('Failed to download calendar');
+    }
+  };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
-      </div>
-    );
+    return <LoadingSpinner />;
   }
 
   if (error) {
-    return (
-      <div className="text-center py-12">
-        <CalendarIcon className="mx-auto h-12 w-12 text-gray-400" />
-        <h3 className="mt-2 text-sm font-medium text-gray-900">{error}</h3>
-        <p className="mt-1 text-sm text-gray-500">
-          Configure your Canvas integration in settings to view your calendar.
-        </p>
-      </div>
-    );
+    return <ErrorMessage message={error} />;
   }
 
   return (
     <div className="space-y-4">
-      {events.map((event) => (
-        <div key={event.id} className="p-4 bg-white rounded-lg shadow">
-          <h3 className="font-medium text-gray-900">{event.title}</h3>
-          <div className="mt-1 text-sm text-gray-500">
-            <p>{new Date(event.start_at).toLocaleString()}</p>
-            {event.location_name && <p>Location: {event.location_name}</p>}
-          </div>
+      <div className="flex justify-between items-center">
+        <h2 className="text-lg font-semibold text-gray-900">Your Schedule</h2>
+        <div className="flex items-center gap-4">
+          <GoogleCalendarButton
+            onSuccess={handleGoogleSuccess}
+            onError={handleGoogleError}
+          />
+          <button
+            onClick={handleDownload}
+            className="flex items-center gap-2 text-sm text-emerald-600 hover:text-emerald-700"
+          >
+            <Download size={16} />
+            <span>Download Calendar</span>
+          </button>
         </div>
-      ))}
+      </div>
+
+      {events.length === 0 ? (
+        <div className="text-center py-12">
+          <CalendarIcon className="mx-auto h-12 w-12 text-gray-400" />
+          <h3 className="mt-2 text-sm font-medium text-gray-900">No events found</h3>
+          <p className="mt-1 text-sm text-gray-500">
+            Your calendar is empty. Connect your Google Calendar to see your events.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {events.map((event) => (
+            <CalendarEvent key={event.id} event={event} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
