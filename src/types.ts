@@ -1,11 +1,17 @@
 export interface Event {
   id: string;
+  user_id: string;
+  google_event_id?: string;
   title: string;
+  description?: string;
   location: string;
   start_time: string;
   end_time: string;
   type: 'career' | 'academic' | 'wellness';
   attendees: number;
+  is_recurring?: boolean;
+  recurrence_rule?: string;
+  source?: 'manual' | 'google' | 'canvas';
 }
 
 export interface Assignment {

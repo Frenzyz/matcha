@@ -6,26 +6,23 @@ export class CalendarService {
 
   static async fetchEvents(userId: string, accessToken?: string): Promise<Event[]> {
     try {
-      // Fetch events from Supabase
       const { data: localEvents, error: localError } = await supabase
         .from('calendar_events')
         .select('*')
         .eq('user_id', userId)
-        .gte('end_time', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()) // Last 30 days
-        .lte('start_time', new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString()) // Next 90 days
+        .gte('end_time', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
+        .lte('start_time', new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString())
         .order('start_time', { ascending: true });
 
       if (localError) throw localError;
 
-      // If we have a Google access token, sync Google Calendar events
       if (accessToken) {
         const googleEvents = await this.syncGoogleEvents(userId, accessToken);
         return this.mergeEvents(localEvents || [], googleEvents);
       }
 
-      // If no events exist, return demo events
       if (!localEvents || localEvents.length === 0) {
-        const demoEvents = this.getDemoEvents();
+        const demoEvents = this.getDemoEvents(userId);
         await this.saveDemoEvents(userId, demoEvents);
         return demoEvents;
       }
@@ -33,7 +30,7 @@ export class CalendarService {
       return localEvents;
     } catch (error) {
       console.error('Calendar fetch error:', error);
-      return this.getDemoEvents();
+      return this.getDemoEvents(userId);
     }
   }
 
@@ -65,50 +62,59 @@ export class CalendarService {
       }
 
       const data = await response.json();
-      const events = data.items.map((item: any) => ({
-        google_event_id: item.id,
-        user_id: userId,
-        title: item.summary,
-        description: item.description,
-        location: item.location || '',
-        start_time: item.start.dateTime || item.start.date,
-        end_time: item.end.dateTime || item.end.date,
-        type: this.determineEventType(item.summary),
-        attendees: item.attendees?.length || 0,
-        is_recurring: !!item.recurrence,
-        recurrence_rule: item.recurrence?.[0],
-        source: 'google'
-      }));
+      
+      // Process each event individually to handle conflicts
+      for (const item of data.items) {
+        const event: Event = {
+          id: crypto.randomUUID(),
+          user_id: userId,
+          google_event_id: item.id,
+          title: item.summary,
+          description: item.description || '',
+          location: item.location || '',
+          start_time: item.start.dateTime || item.start.date,
+          end_time: item.end.dateTime || item.end.date,
+          type: this.determineEventType(item.summary),
+          attendees: item.attendees?.length || 0,
+          is_recurring: !!item.recurrence,
+          recurrence_rule: item.recurrence?.[0],
+          source: 'google'
+        };
 
-      // Sync with Supabase
-      await this.upsertEvents(userId, events);
+        await this.upsertEvent(event);
+      }
 
-      return events;
+      // Fetch all synced events
+      const { data: syncedEvents } = await supabase
+        .from('calendar_events')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('source', 'google');
+
+      return syncedEvents || [];
     } catch (error) {
       console.error('Google Calendar sync error:', error);
       return [];
     }
   }
 
-  private static async upsertEvents(userId: string, events: any[]): Promise<void> {
+  private static async upsertEvent(event: Event): Promise<void> {
     try {
       const { error } = await supabase
         .from('calendar_events')
         .upsert(
-          events.map(event => ({
+          {
             ...event,
-            user_id: userId,
             updated_at: new Date().toISOString()
-          })),
-          { 
-            onConflict: 'google_event_id',
-            ignoreDuplicates: false 
+          },
+          {
+            onConflict: 'unique_google_event'
           }
         );
 
       if (error) throw error;
     } catch (error) {
-      console.error('Error upserting events:', error);
+      console.error('Error upserting event:', error);
       throw error;
     }
   }
@@ -117,11 +123,7 @@ export class CalendarService {
     try {
       const { error } = await supabase
         .from('calendar_events')
-        .insert(events.map(event => ({
-          ...event,
-          user_id: userId,
-          source: 'manual'
-        })));
+        .insert(events);
 
       if (error) throw error;
     } catch (error) {
@@ -145,26 +147,23 @@ export class CalendarService {
   }
 
   private static mergeEvents(localEvents: Event[], googleEvents: Event[]): Event[] {
-    const allEvents = [...localEvents, ...googleEvents];
+    const allEvents = [...localEvents];
     
-    // Remove duplicates based on google_event_id
-    const uniqueEvents = allEvents.reduce((acc: Event[], current) => {
-      const isDuplicate = acc.some(event => 
-        event.google_event_id === current.google_event_id
+    googleEvents.forEach(googleEvent => {
+      const exists = localEvents.some(localEvent => 
+        localEvent.google_event_id === googleEvent.google_event_id
       );
-      if (!isDuplicate) {
-        acc.push(current);
+      if (!exists) {
+        allEvents.push(googleEvent);
       }
-      return acc;
-    }, []);
+    });
 
-    // Sort by start time
-    return uniqueEvents.sort((a, b) => 
+    return allEvents.sort((a, b) => 
       new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
     );
   }
 
-  private static getDemoEvents(): Event[] {
+  private static getDemoEvents(userId: string): Event[] {
     const now = new Date();
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -174,6 +173,7 @@ export class CalendarService {
     return [
       {
         id: crypto.randomUUID(),
+        user_id: userId,
         title: 'Introduction to Computer Science',
         description: 'Weekly lecture covering programming fundamentals',
         location: 'Woodward Hall 140',
@@ -181,10 +181,11 @@ export class CalendarService {
         end_time: new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString(),
         type: 'academic',
         attendees: 30,
-        source: 'manual'
+        source: 'manual' as const
       },
       {
         id: crypto.randomUUID(),
+        user_id: userId,
         title: 'Study Group - Data Structures',
         description: 'Weekly study group session',
         location: 'Atkins Library Study Room 205',
@@ -192,10 +193,11 @@ export class CalendarService {
         end_time: new Date(tomorrow.getTime() + 1.5 * 60 * 60 * 1000).toISOString(),
         type: 'academic',
         attendees: 5,
-        source: 'manual'
+        source: 'manual' as const
       },
       {
         id: crypto.randomUUID(),
+        user_id: userId,
         title: 'Career Fair Prep Workshop',
         description: 'Prepare for the upcoming career fair',
         location: 'Student Union Room 340',
@@ -203,46 +205,8 @@ export class CalendarService {
         end_time: new Date(nextWeek.getTime() + 1 * 60 * 60 * 1000).toISOString(),
         type: 'career',
         attendees: 50,
-        source: 'manual'
+        source: 'manual' as const
       }
     ];
-  }
-
-  static generateICalFile(events: Event[]): Blob {
-    const icalContent = [
-      'BEGIN:VCALENDAR',
-      'VERSION:2.0',
-      'PRODID:-//Matcha//UNCC Calendar//EN',
-      ...events.flatMap(event => [
-        'BEGIN:VEVENT',
-        `UID:${event.id}`,
-        `SUMMARY:${event.title}`,
-        event.description ? `DESCRIPTION:${event.description}` : '',
-        `DTSTART:${new Date(event.start_time).toISOString().replace(/[-:]/g, '')}`,
-        `DTEND:${new Date(event.end_time).toISOString().replace(/[-:]/g, '')}`,
-        event.location ? `LOCATION:${event.location}` : '',
-        'END:VEVENT'
-      ]),
-      'END:VCALENDAR'
-    ].join('\r\n');
-
-    return new Blob([icalContent], { type: 'text/calendar;charset=utf-8' });
-  }
-
-  static downloadCalendar(events: Event[], filename: string = 'calendar.ics'): void {
-    try {
-      const blob = this.generateICalFile(events);
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Download error:', error);
-      throw error instanceof Error ? error : new Error('Failed to download calendar');
-    }
   }
 }
