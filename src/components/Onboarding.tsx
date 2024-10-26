@@ -4,6 +4,7 @@ import { GraduationCap, Palette } from 'lucide-react';
 import { useThemeStore } from '../store/themeStore';
 import { supabase } from '../config/supabase';
 import { useAuth } from '../context/AuthContext';
+import GoogleCalendarButton from './GoogleCalendarButton';
 
 interface OnboardingStep {
   title: string;
@@ -20,8 +21,8 @@ const steps: OnboardingStep[] = [
     description: "Choose a color theme that represents you."
   },
   {
-    title: "Set Your Goals",
-    description: "Tell us about your academic and career goals so we can better assist you."
+    title: "Connect Your Calendar",
+    description: "Sync with Google Calendar to manage your schedule effectively."
   }
 ];
 
@@ -42,6 +43,7 @@ export default function Onboarding() {
     interests: '',
     goals: ''
   });
+  const [calendarConnected, setCalendarConnected] = useState(false);
 
   const handleComplete = async () => {
     if (!user) return;
@@ -58,10 +60,26 @@ export default function Onboarding() {
         }]);
 
       if (error) throw error;
+
+      // Mark setup as completed
+      await supabase
+        .from('profiles')
+        .update({ setup_completed: true })
+        .eq('id', user.id);
+
       navigate('/');
     } catch (err) {
       console.error('Error saving preferences:', err);
     }
+  };
+
+  const handleGoogleSuccess = async (token: string) => {
+    setCalendarConnected(true);
+    // Optionally store the token in your user preferences
+  };
+
+  const handleGoogleError = (error: Error) => {
+    console.error('Google Calendar error:', error);
   };
 
   return (
@@ -115,12 +133,20 @@ export default function Onboarding() {
 
           {currentStep === 2 && (
             <div className="space-y-4">
-              <textarea
-                placeholder="What are your career goals?"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                value={formData.goals}
-                onChange={(e) => setFormData({ ...formData, goals: e.target.value })}
-              />
+              <div className="flex justify-center">
+                <GoogleCalendarButton
+                  onSuccess={handleGoogleSuccess}
+                  onError={handleGoogleError}
+                />
+              </div>
+              {calendarConnected && (
+                <p className="text-center text-sm text-emerald-600">
+                  ✓ Calendar connected successfully!
+                </p>
+              )}
+              <p className="text-center text-sm text-gray-500">
+                You can always connect your calendar later from the settings.
+              </p>
             </div>
           )}
 

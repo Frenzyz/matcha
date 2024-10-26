@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, Download, AlertCircle } from 'lucide-react';
+import { Calendar as CalendarIcon, Download, AlertCircle, List, Grid } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { CalendarService } from '../services/calendar';
 import { Event } from '../types';
 import CalendarEvent from './CalendarEvent';
+import CalendarView from './CalendarView';
 import ErrorMessage from './ErrorMessage';
 import LoadingSpinner from './LoadingSpinner';
 import GoogleCalendarButton from './GoogleCalendarButton';
@@ -13,6 +14,7 @@ export default function Calendar() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [googleToken, setGoogleToken] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('calendar');
   const { user } = useAuth();
 
   useEffect(() => {
@@ -86,6 +88,28 @@ export default function Calendar() {
       <div className="flex justify-between items-center">
         <h2 className="text-lg font-semibold text-gray-900">Your Schedule</h2>
         <div className="flex items-center gap-4">
+          <div className="flex bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-2 rounded ${
+                viewMode === 'list'
+                  ? 'bg-white shadow-sm'
+                  : 'hover:bg-white/50'
+              }`}
+            >
+              <List size={20} />
+            </button>
+            <button
+              onClick={() => setViewMode('calendar')}
+              className={`p-2 rounded ${
+                viewMode === 'calendar'
+                  ? 'bg-white shadow-sm'
+                  : 'hover:bg-white/50'
+              }`}
+            >
+              <Grid size={20} />
+            </button>
+          </div>
           <GoogleCalendarButton
             onSuccess={handleGoogleSuccess}
             onError={handleGoogleError}
@@ -108,6 +132,8 @@ export default function Calendar() {
             Your calendar is empty. Connect your Google Calendar to see your events.
           </p>
         </div>
+      ) : viewMode === 'calendar' ? (
+        <CalendarView events={events} />
       ) : (
         <div className="space-y-4">
           {events.map((event) => (

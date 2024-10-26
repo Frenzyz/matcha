@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Save, Key, Palette, Moon } from 'lucide-react';
+import React, { useState } from 'react';
+import { Save, Palette, Moon, Calendar } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useThemeStore } from '../store/themeStore';
 import { useConnection } from '../hooks/useConnection';
-import { supabase, retryOperation } from '../config/supabase';
 import ConnectionStatus from './ConnectionStatus';
+import GoogleCalendarButton from './GoogleCalendarButton';
 
 const colorThemes = [
   { name: 'emerald', color: '#10B981', label: 'Emerald' },
@@ -16,65 +16,14 @@ const colorThemes = [
 export default function Settings() {
   const { user } = useAuth();
   const { setPrimaryColor, primaryColor, isDarkMode, toggleDarkMode } = useThemeStore();
-  const [calendarUrl, setCalendarUrl] = useState('');
-  const [hasExistingCalendar, setHasExistingCalendar] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const isOnline = useConnection();
-
-  useEffect(() => {
-    const fetchUserSettings = async () => {
-      if (!user) return;
-
-      try {
-        setIsLoading(true);
-        const { data, error } = await retryOperation(async () =>
-          supabase
-            .from('profiles')
-            .select('canvas_calendar_url, theme_color')
-            .eq('id', user.id)
-            .single()
-        );
-
-        if (error) throw error;
-
-        if (data) {
-          setHasExistingCalendar(!!data.canvas_calendar_url);
-          if (data.canvas_calendar_url) {
-            setCalendarUrl(data.canvas_calendar_url);
-          }
-          if (data.theme_color) {
-            setPrimaryColor(data.theme_color);
-          }
-        }
-      } catch (error) {
-        setMessage({
-          type: 'error',
-          text: isOnline 
-            ? 'Having trouble connecting to the server. Please try again.' 
-            : 'You\'re offline. Settings will sync when you\'re back online.'
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchUserSettings();
-  }, [user, isOnline, setPrimaryColor]);
 
   const handleColorChange = async (color: string) => {
     setPrimaryColor(color);
     if (user && isOnline) {
       try {
-        const { error } = await retryOperation(async () =>
-          supabase
-            .from('profiles')
-            .update({ theme_color: color })
-            .eq('id', user.id)
-        );
-
-        if (error) throw error;
         setMessage({ type: 'success', text: 'Theme color updated!' });
       } catch (error) {
         setMessage({ type: 'error', text: 'Failed to save theme preference' });
@@ -82,40 +31,25 @@ export default function Settings() {
     }
   };
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) return;
-
+  const handleGoogleSuccess = async (token: string) => {
     try {
-      setIsSaving(true);
-      const { error } = await retryOperation(async () =>
-        supabase
-          .from('profiles')
-          .update({
-            canvas_calendar_url: calendarUrl,
-            theme_color: primaryColor,
-            last_seen: new Date().toISOString()
-          })
-          .eq('id', user.id)
-      );
-
-      if (error) throw error;
-
       setMessage({ 
         type: 'success', 
-        text: isOnline 
-          ? 'Settings saved successfully!' 
-          : 'Settings saved locally and will sync when you\'re back online.'
+        text: 'Google Calendar connected successfully!' 
       });
-      setHasExistingCalendar(true);
     } catch (error) {
       setMessage({ 
         type: 'error', 
-        text: 'Failed to save settings. Please try again.'
+        text: 'Failed to connect Google Calendar' 
       });
-    } finally {
-      setIsSaving(false);
     }
+  };
+
+  const handleGoogleError = (error: Error) => {
+    setMessage({ 
+      type: 'error', 
+      text: 'Failed to connect Google Calendar' 
+    });
   };
 
   if (isLoading) {
@@ -174,28 +108,21 @@ export default function Settings() {
           </div>
 
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-            <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-6">Canvas Calendar Integration</h2>
+            <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-6">Calendar Integration</h2>
             
-            <form onSubmit={handleSave} className="space-y-6">
+            <div className="space-y-6">
               <div>
-                <label htmlFor="calendar-url" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Canvas Calendar URL {hasExistingCalendar && '(Already configured)'}
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
+                  Connect Your Calendar
                 </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Key className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    type="url"
-                    id="calendar-url"
-                    value={calendarUrl}
-                    onChange={(e) => setCalendarUrl(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-theme-primary focus:border-theme-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    placeholder={hasExistingCalendar ? '••••••••' : 'Enter your Canvas calendar URL'}
+                <div className="flex justify-start">
+                  <GoogleCalendarButton
+                    onSuccess={handleGoogleSuccess}
+                    onError={handleGoogleError}
                   />
                 </div>
                 <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                  Find your calendar URL in Canvas under Calendar &gt; Calendar Feed
+                  Connect your Google Calendar to sync your academic and personal events
                 </p>
               </div>
 
@@ -206,20 +133,7 @@ export default function Settings() {
                   {message.text}
                 </div>
               )}
-
-              <div className="flex justify-end">
-                <button
-                  type="submit"
-                  disabled={isSaving || (!isOnline && !calendarUrl)}
-                  className={`flex items-center gap-2 px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-theme-primary hover:bg-theme-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-primary transition-colors ${
-                    (isSaving || (!isOnline && !calendarUrl)) ? 'opacity-50 cursor-not-allowed' : ''
-                  }`}
-                >
-                  <Save size={16} />
-                  {isSaving ? 'Saving...' : 'Save Changes'}
-                </button>
-              </div>
-            </form>
+            </div>
           </div>
         </div>
       </main>
