@@ -9,7 +9,8 @@ export default function TimeAnalysis() {
     { name: 'Classes', value: 6, color: '#10B981' },
     { name: 'Study Time', value: 4, color: '#3B82F6' },
     { name: 'Events', value: 2, color: '#8B5CF6' },
-    { name: 'Free Time', value: 12, color: '#EC4899' }
+    { name: 'Free Time', value: 4, color: '#EC4899' },
+    { name: 'Sleep', value: 8, color: '#FF0000' }  // Updated to bright red
   ];
 
   return (
