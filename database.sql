@@ -1,31 +1,45 @@
--- Add scholarships table
-create table if not exists public.scholarships (
-  id uuid default gen_random_uuid() primary key,
-  title text not null,
-  description text,
-  amount text not null,
-  deadline timestamp with time zone not null,
-  eligibility text[],
-  majors text[],
-  url text not null,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
-  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+-- Enable UUID extension if not already enabled
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- Calendar Events Table with proper constraints
+CREATE TABLE IF NOT EXISTS calendar_events (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  location TEXT,
+  start_time TIMESTAMP WITH TIME ZONE NOT NULL,
+  end_time TIMESTAMP WITH TIME ZONE NOT NULL,
+  type TEXT CHECK (type IN ('academic', 'career', 'wellness')),
+  attendees INTEGER DEFAULT 0,
+  source TEXT CHECK (source IN ('manual', 'scraped', 'google', 'canvas', 'demo')) NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  UNIQUE(user_id, title, start_time, location)
 );
 
--- Enable RLS for scholarships
-alter table public.scholarships enable row level security;
+-- Create indexes
+CREATE INDEX IF NOT EXISTS idx_calendar_events_user_id ON calendar_events(user_id);
+CREATE INDEX IF NOT EXISTS idx_calendar_events_start_time ON calendar_events(start_time);
+CREATE INDEX IF NOT EXISTS idx_calendar_events_type ON calendar_events(type);
+CREATE INDEX IF NOT EXISTS idx_calendar_events_source ON calendar_events(source);
 
--- Create policy for viewing scholarships
-create policy "Scholarships are viewable by all authenticated users"
-  on scholarships for select
-  using (auth.role() = 'authenticated');
+-- Add RLS policies
+ALTER TABLE calendar_events ENABLE ROW LEVEL SECURITY;
 
--- Create index for scholarship search
-create index scholarships_majors_idx on scholarships using gin (majors);
-create index scholarships_deadline_idx on scholarships(deadline);
+-- Calendar events policies
+CREATE POLICY "Users can view their own events"
+  ON calendar_events FOR SELECT
+  USING (auth.uid() = user_id);
 
--- Add trigger for updated_at
-create trigger handle_scholarships_updated_at
-  before update on scholarships
-  for each row
-  execute function handle_updated_at();
+CREATE POLICY "Users can create their own events"
+  ON calendar_events FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own events"
+  ON calendar_events FOR UPDATE
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own events"
+  ON calendar_events FOR DELETE
+  USING (auth.uid() = user_id);

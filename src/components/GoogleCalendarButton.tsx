@@ -17,7 +17,7 @@ export default function GoogleCalendarButton({ onSuccess, onError }: GoogleCalen
   return (
     <button
       onClick={() => login()}
-      className="flex items-center gap-2 px-4 py-2 bg-white text-gray-600 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors"
+      className="flex items-center gap-2 px-4 py-2 bg-theme-primary text-white rounded-lg hover:bg-theme-hover transition-colors"
     >
       <Calendar size={20} />
       <span>Connect Google Calendar</span>

@@ -18,12 +18,6 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2">
               <div className={`${isDarkMode ? 'bg-gray-800 text-white' : 'bg-white'} rounded-xl shadow-sm p-6`}>
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold">Your Schedule</h2>
-                  <button className="flex items-center gap-2 text-emerald-600 hover:text-emerald-700">
-                    <span>Sync Calendar</span>
-                  </button>
-                </div>
                 <EventCalendar />
               </div>
             </div>

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Calendar, MessageSquare, PieChart, Settings, GraduationCap } from 'lucide-react';
+import { Calendar, MessageSquare, PieChart, Settings, GraduationCap, Heart } from 'lucide-react';
 import { useThemeStore } from '../store/themeStore';
 
 export default function Sidebar() {
@@ -10,6 +10,7 @@ export default function Sidebar() {
   const links = [
     { icon: Calendar, label: 'Calendar', path: '/' },
     { icon: MessageSquare, label: 'Chat', path: '/chat' },
+    { icon: Heart, label: 'Virtual Parent', path: '/virtual-parent' },
     { icon: PieChart, label: 'Time Analysis', path: '/analysis' },
     { icon: GraduationCap, label: 'Scholarships', path: '/scholarships' },
     { icon: Settings, label: 'Settings', path: '/settings' }

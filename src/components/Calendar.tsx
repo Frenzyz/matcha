@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, Download, AlertCircle, List, Grid } from 'lucide-react';
+import { Calendar as CalendarIcon, Download, List, Grid } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { CalendarService } from '../services/calendar';
 import { Event } from '../types';
@@ -86,25 +86,25 @@ export default function Calendar() {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h2 className="text-lg font-semibold text-gray-900">Your Schedule</h2>
+        <h2 className="text-lg font-semibold">Your Schedule</h2>
         <div className="flex items-center gap-4">
-          <div className="flex bg-gray-100 rounded-lg p-1">
+          <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
             <button
               onClick={() => setViewMode('list')}
-              className={`p-2 rounded ${
+              className={`p-2 rounded transition-colors ${
                 viewMode === 'list'
-                  ? 'bg-white shadow-sm'
-                  : 'hover:bg-white/50'
+                  ? 'bg-theme-primary text-white'
+                  : 'hover:bg-theme-primary/10'
               }`}
             >
               <List size={20} />
             </button>
             <button
               onClick={() => setViewMode('calendar')}
-              className={`p-2 rounded ${
+              className={`p-2 rounded transition-colors ${
                 viewMode === 'calendar'
-                  ? 'bg-white shadow-sm'
-                  : 'hover:bg-white/50'
+                  ? 'bg-theme-primary text-white'
+                  : 'hover:bg-theme-primary/10'
               }`}
             >
               <Grid size={20} />
@@ -116,7 +116,7 @@ export default function Calendar() {
           />
           <button
             onClick={handleDownload}
-            className="flex items-center gap-2 text-sm text-emerald-600 hover:text-emerald-700"
+            className="flex items-center gap-2 text-sm text-theme-primary hover:text-theme-hover"
           >
             <Download size={16} />
             <span>Download Calendar</span>
@@ -126,9 +126,9 @@ export default function Calendar() {
 
       {events.length === 0 ? (
         <div className="text-center py-12">
-          <CalendarIcon className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-2 text-sm font-medium text-gray-900">No events found</h3>
-          <p className="mt-1 text-sm text-gray-500">
+          <CalendarIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-600" />
+          <h3 className="mt-2 text-sm font-medium">No events found</h3>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             Your calendar is empty. Connect your Google Calendar to see your events.
           </p>
         </div>

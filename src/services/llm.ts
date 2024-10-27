@@ -1,43 +1,37 @@
+import Groq from 'groq-sdk';
 import { ChatCompletionMessage, ChatCompletionResponse } from './types';
 
 export class LLMService {
-  private baseUrl: string = 'http://cci-llm.charlotte.edu/api/v1';
-  private apiKey: string = 'OnuR-l5IlfYqF8HYoTOYHAcHOXCgL5xASQM5ooGHG6A';
-  private model: string = 'Llama-2-70B';
+  private groq: Groq;
+  private model: string = 'llama3-8b-8192';
+
+  constructor() {
+    this.groq = new Groq({
+      apiKey: import.meta.env.VITE_GROQ_API_KEY,
+      dangerouslyAllowBrowser: true
+    });
+  }
 
   private async makeRequest(messages: ChatCompletionMessage[]): Promise<string> {
     try {
-      const response = await fetch(`${this.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
-        },
-        body: JSON.stringify({
-          model: this.model,
-          messages,
-          max_tokens: 300,
-          temperature: 0
-        })
+      const response = await this.groq.chat.completions.create({
+        messages,
+        model: this.model,
+        temperature: 0.7,
+        max_tokens: 500,
+        top_p: 0.95
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error?.message || `HTTP error! status: ${response.status}`);
+      if (!response.choices?.[0]?.message?.content) {
+        throw new Error('Invalid response format from Groq service');
       }
 
-      const data = await response.json() as ChatCompletionResponse;
-      
-      if (!data.choices?.[0]?.message?.content) {
-        throw new Error('Invalid response format from LLM service');
-      }
-
-      return data.choices[0].message.content;
+      return response.choices[0].message.content;
     } catch (error) {
       if (error instanceof Error) {
-        throw new Error(`LLM service error: ${error.message}`);
+        throw new Error(`Groq service error: ${error.message}`);
       }
-      throw new Error('An unexpected error occurred while communicating with the LLM service');
+      throw new Error('An unexpected error occurred while communicating with the Groq service');
     }
   }
 
@@ -54,6 +48,31 @@ export class LLMService {
                  - Assignment tracking and reminders
                  - Study tips and resources
                  - Campus event recommendations
+                 - Library services and policies
+                 - EPIC Affiliates Program information
+                 - CHHS department programs and opportunities
+
+                 Library Information:
+                 - Located in Atkins Library with 11 floors
+                 - Houses study rooms, classrooms, resources centers, help desks
+                 - Community hours: M-F 7:30am-10pm, Sat 10am-10pm, Sun 11am-7pm
+                 - UNC Charlotte ID required 7pm-7:30am
+                 - No limit on item checkouts for university patrons
+                 - Book returns at Info Desk or various campus drop locations
+                 - Renewals available online or at Info Desk
+
+                 EPIC Affiliates Program:
+                 - Industry-academic partnership for energy workforce development
+                 - Connects industry members with research faculty and students
+                 - Focuses on electrical, computer, civil, environmental, mechanical engineering
+                 - Provides internship and recruitment opportunities
+
+                 CHHS Department:
+                 - Offers programs in Exercise Science, Respiratory Therapy, Kinesiology
+                 - Prepares students for careers in health services
+                 - Strong focus on student success and career preparation
+                 - Provides pathways to graduate education
+                 
                  Always be helpful, accurate, and encouraging.`
       },
       {
@@ -74,15 +93,13 @@ export class LLMService {
       const response = await this.generate(prompt);
       
       if (!response) {
-        throw new Error('Empty response from LLM service');
+        throw new Error('Empty response from Groq service');
       }
 
-      // Simulate streaming by splitting the response into words
       const words = response.split(' ');
       
       for (const word of words) {
         onChunk(word + ' ');
-        // Add a small delay between words to simulate streaming
         await new Promise(resolve => setTimeout(resolve, 50));
       }
     } catch (error) {
@@ -94,7 +111,6 @@ export class LLMService {
   }
 
   async reset(): Promise<void> {
-    // No state to reset with this implementation
     return Promise.resolve();
   }
 }
