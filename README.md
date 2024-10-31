@@ -6,100 +6,91 @@ An AI-powered academic assistant designed specifically for UNCC students, helpin
 
 ## 🌟 Features
 
--   **AI-Powered Academic Assistant** - Get personalized guidance and support for your academic journey
--   **Smart Calendar Integration** - Sync with Google Calendar and manage your schedule efficiently
--   **Task Management** - Track assignments, deadlines, and events with smart reminders
--   **Virtual Parent Mode** - Get caring advice with a touch of dad jokes and puns
--   **Time Analysis** - Visualize and optimize your time management
--   **Scholarship Tracking** - Find and manage scholarship opportunities
--   **Dark Mode** - Comfortable viewing experience day and night
+- **AI-Powered Academic Assistant** - Get personalized guidance and support for your academic journey
+- **Smart Calendar Integration** - Sync with Google Calendar and manage your schedule efficiently
+- **Task Management** - Track assignments, deadlines, and events with smart reminders
+- **Virtual Parent Mode** - Get caring advice with a touch of dad jokes and puns
+- **Time Analysis** - Visualize and optimize your time management
+- **Scholarship Tracking** - Find and manage scholarship opportunities
+- **Dark Mode** - Comfortable viewing experience day and night
 
 ## 🚀 Getting Started
 
 1. **Prerequisites**
-
-    ```bash
-    node >= 18.0.0
-    npm >= 9.0.0
-    ```
+   ```bash
+   node >= 18.0.0
+   npm >= 9.0.0
+   ```
 
 2. **Installation**
+   ```bash
+   # Clone the repository
+   git clone https://github.com/Frenzyz/matcha.git
 
-    ```bash
-    # Clone the repository
-    git clone https://github.com/Frenzyz/matcha.git
-
-    # Install dependencies
-    cd matcha
-    npm install
-    ```
+   # Install dependencies
+   cd matcha
+   npm install
+   ```
 
 3. **Environment Setup**
    Create a `.env` file in the root directory with:
-
-    ```
-    VITE_SUPABASE_URL=your_supabase_url
-    VITE_SUPABASE_ANON_KEY=your_supabase_key
-    VITE_GOOGLE_CLIENT_ID=your_google_client_id
-    VITE_GROQ_API_KEY=your_groq_api_key
-    ```
+   ```
+   VITE_SUPABASE_URL=your_supabase_url
+   VITE_SUPABASE_ANON_KEY=your_supabase_key
+   VITE_GOOGLE_CLIENT_ID=your_google_client_id
+   VITE_GROQ_API_KEY=your_groq_api_key
+   ```
 
 4. **Development**
-
-    ```bash
-    npm run dev
-    ```
+   ```bash
+   npm run dev
+   ```
 
 5. **Build**
-    ```bash
-    npm run build
-    ```
+   ```bash
+   npm run build
+   ```
 
 ## 🛠️ Technology Stack
 
--   **Frontend**
+- **Frontend**
+  - React 18
+  - TypeScript
+  - Tailwind CSS
+  - Vite
+  - Lucide Icons
 
-    -   React 18
-    -   TypeScript
-    -   Tailwind CSS
-    -   Vite
-    -   Lucide Icons
+- **Backend & Database**
+  - Supabase
+  - PostgreSQL
 
--   **Backend & Database**
+- **AI/ML**
+  - Groq API
+  - Google Calendar API
 
-    -   Supabase
-    -   PostgreSQL
-
--   **AI/ML**
-
-    -   Groq API
-    -   Google Calendar API
-
--   **Authentication**
-    -   Supabase Auth
-    -   Google OAuth
+- **Authentication**
+  - Supabase Auth
+  - Google OAuth
 
 ## 📱 Key Features
 
--   **Smart Calendar**
+- **Smart Calendar**
+  - Google Calendar integration
+  - Event management
+  - Task tracking
+  - Time analysis
 
-    -   Google Calendar integration
-    -   Event management
-    -   Task tracking
-    -   Time analysis
+- **AI Assistant**
+  - Academic guidance
+  - Virtual parent mode
+  - Personalized recommendations
+  - Study tips
 
--   **AI Assistant**
-
-    -   Academic guidance
-    -   Virtual parent mode
-    -   Personalized recommendations
-    -   Study tips
-
--   **Scholarship Management**
-    -   Scholarship discovery
-    -   Application tracking
-    -   Deadline management
-    -   Requirements tracking
+- **Scholarship Management**
+  - Scholarship discovery
+  - Application tracking
+  - Deadline management
+  - Requirements tracking
 
 ## 🤝 Contributing
 
@@ -115,9 +106,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgments
 
--   UNCC for supporting student innovation
--   The open-source community
--   All contributors and testers
+- UNCC for supporting student innovation
+- The open-source community
+- All contributors and testers
 
 ---
 

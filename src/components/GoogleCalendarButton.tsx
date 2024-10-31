@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
-import { Calendar } from 'lucide-react';
-import CalendarSetup from './CalendarSetup';
+import { Calendar, Loader2 } from 'lucide-react';
 
 interface GoogleCalendarButtonProps {
   onSuccess: (token: string) => void;
@@ -9,45 +8,35 @@ interface GoogleCalendarButtonProps {
 }
 
 export default function GoogleCalendarButton({ onSuccess, onError }: GoogleCalendarButtonProps) {
-  const [token, setToken] = useState<string | null>(null);
-  const [showSetup, setShowSetup] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const login = useGoogleLogin({
     onSuccess: (response) => {
-      setToken(response.access_token);
-      setShowSetup(true);
+      if (!response.access_token) {
+        onError?.(new Error('No access token received'));
+        return;
+      }
+      setLoading(true);
+      onSuccess(response.access_token);
+      setLoading(false);
     },
-    onError: (error) => onError?.(error),
-    scope: 'https://www.googleapis.com/auth/calendar.readonly',
+    onError: (error) => onError?.(new Error(error.error_description || 'Failed to connect to Google Calendar')),
+    scope: 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events.readonly',
+    flow: 'implicit'
   });
-
-  const handleSetupComplete = () => {
-    setShowSetup(false);
-    if (token) {
-      onSuccess(token);
-    }
-  };
-
-  if (showSetup && token) {
-    return (
-      <CalendarSetup
-        token={token}
-        onComplete={handleSetupComplete}
-        onError={(error) => {
-          setShowSetup(false);
-          onError?.(error);
-        }}
-      />
-    );
-  }
 
   return (
     <button
       onClick={() => login()}
-      className="flex items-center gap-2 px-4 py-2 bg-theme-primary text-white rounded-lg hover:bg-theme-hover transition-colors"
+      disabled={loading}
+      className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
     >
-      <Calendar size={20} />
-      <span>Connect Google Calendar</span>
+      {loading ? (
+        <Loader2 className="h-5 w-5 animate-spin" />
+      ) : (
+        <Calendar className="h-5 w-5" />
+      )}
+      <span>{loading ? 'Connecting...' : 'Connect Google Calendar'}</span>
     </button>
   );
 }

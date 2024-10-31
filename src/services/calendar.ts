@@ -9,30 +9,48 @@ export class CalendarService {
   private static readonly GOOGLE_CALENDAR_API = 'https://www.googleapis.com/calendar/v3';
 
   static async listCalendars(accessToken: string) {
+    if (!accessToken?.trim()) {
+      throw new Error('Valid access token is required');
+    }
+
     try {
       const response = await fetch(
         `${this.GOOGLE_CALENDAR_API}/users/me/calendarList`,
         {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
           }
         }
       );
 
       if (!response.ok) {
-        throw new Error('Failed to fetch calendars');
+        const errorData = await response.json().catch(() => ({}));
+        if (response.status === 401) {
+          throw new Error('Calendar access token expired. Please reconnect your Google Calendar.');
+        }
+        throw new Error(errorData.error?.message || `Failed to fetch calendars (${response.status})`);
       }
 
       const data = await response.json();
-      return data.items.map((calendar: any) => ({
-        id: calendar.id,
-        summary: calendar.summary,
-        primary: calendar.primary || false
-      }));
+      
+      if (!data?.items?.length) {
+        throw new Error('No calendars found in your Google Account');
+      }
+
+      return data.items
+        .filter((calendar: any) => calendar?.id && calendar?.summary)
+        .map((calendar: any) => ({
+          id: calendar.id,
+          summary: calendar.summary || 'Untitled Calendar',
+          primary: calendar.primary || false,
+          description: calendar.description,
+          backgroundColor: calendar.backgroundColor
+        }));
     } catch (error) {
-      logger.error('Error fetching calendars:', error);
-      throw error;
+      logger.error('Error fetching calendars:', { error, token: accessToken ? 'present' : 'missing' });
+      throw error instanceof Error ? error : new Error('Failed to fetch calendars');
     }
   }
 
@@ -40,6 +58,16 @@ export class CalendarService {
     token: string;
     selectedCalendars: string[];
   }): Promise<void> {
+    if (!userId?.trim()) {
+      throw new Error('User ID is required');
+    }
+    if (!preferences?.token?.trim()) {
+      throw new Error('Valid access token is required');
+    }
+    if (!preferences?.selectedCalendars?.length) {
+      throw new Error('At least one calendar must be selected');
+    }
+
     try {
       await retryOperation(
         async () => {
@@ -60,71 +88,44 @@ export class CalendarService {
           maxAttempts: this.MAX_RETRIES,
           delay: this.RETRY_DELAY,
           backoff: true,
-          onRetry: (attempt, error) => {
-            logger.warn(`Retrying calendar preferences save (attempt ${attempt}):`, error);
+          onRetry: (attempt) => {
+            logger.warn(`Retrying calendar preferences save (attempt ${attempt})`);
           }
         }
       );
 
-      // After saving preferences, sync events
       await this.syncGoogleEvents(userId, preferences.token, preferences.selectedCalendars);
     } catch (error) {
-      logger.error('Error saving calendar preferences:', error);
-      throw error;
-    }
-  }
-
-  static async addEvent(event: Event, userId: string): Promise<void> {
-    try {
-      const eventData = {
-        ...event,
-        user_id: userId,
-        source: event.source || 'calendar',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-
-      await retryOperation(
-        async () => {
-          const { error } = await supabase
-            .from('calendar_events')
-            .insert([eventData]);
-
-          if (error) throw error;
-        },
-        {
-          maxAttempts: this.MAX_RETRIES,
-          delay: this.RETRY_DELAY,
-          backoff: true,
-          onRetry: (attempt, error) => {
-            logger.warn(`Retrying event add (attempt ${attempt}):`, error);
-          }
-        }
-      );
-    } catch (error) {
-      logger.error('Error adding event:', error);
-      throw error;
+      logger.error('Error saving calendar preferences:', { error, userId });
+      throw error instanceof Error ? error : new Error('Failed to save calendar preferences');
     }
   }
 
   static async syncGoogleEvents(userId: string, accessToken: string, calendarIds: string[]) {
+    if (!userId?.trim() || !accessToken?.trim() || !calendarIds?.length) {
+      throw new Error('Missing required parameters for calendar sync');
+    }
+
     try {
-      const events = await Promise.all(
+      const events = await Promise.allSettled(
         calendarIds.map(calendarId =>
           this.fetchGoogleCalendarEvents(accessToken, calendarId)
         )
       );
 
-      const flattenedEvents = events.flat().map(event => ({
-        ...event,
-        user_id: userId,
-        source: 'google'
-      }));
+      const successfulEvents = events
+        .filter((result): result is PromiseFulfilledResult<Event[]> => result.status === 'fulfilled')
+        .map(result => result.value)
+        .flat()
+        .map(event => ({
+          ...event,
+          user_id: userId,
+          source: 'google'
+        }));
 
-      if (flattenedEvents.length > 0) {
+      if (successfulEvents.length > 0) {
         await retryOperation(
           async () => {
-            // First, delete existing Google Calendar events
             const { error: deleteError } = await supabase
               .from('calendar_events')
               .delete()
@@ -133,10 +134,9 @@ export class CalendarService {
 
             if (deleteError) throw deleteError;
 
-            // Then insert new events
             const { error: insertError } = await supabase
               .from('calendar_events')
-              .insert(flattenedEvents);
+              .insert(successfulEvents);
 
             if (insertError) throw insertError;
           },
@@ -144,15 +144,15 @@ export class CalendarService {
             maxAttempts: this.MAX_RETRIES,
             delay: this.RETRY_DELAY,
             backoff: true,
-            onRetry: (attempt, error) => {
-              logger.warn(`Retrying events sync (attempt ${attempt}):`, error);
+            onRetry: (attempt) => {
+              logger.warn(`Retrying event sync (attempt ${attempt})`);
             }
           }
         );
       }
     } catch (error) {
-      logger.error('Error syncing Google events:', error);
-      throw error;
+      logger.error('Error syncing Google events:', { error, userId });
+      throw error instanceof Error ? error : new Error('Failed to sync calendar events');
     }
   }
 
@@ -163,41 +163,62 @@ export class CalendarService {
     const timeMax = new Date();
     timeMax.setMonth(timeMax.getMonth() + 3);
 
-    const response = await fetch(
-      `${this.GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events?` +
-      new URLSearchParams({
-        timeMin: timeMin.toISOString(),
-        timeMax: timeMax.toISOString(),
-        singleEvents: 'true',
-        orderBy: 'startTime'
-      }),
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
+    try {
+      const response = await fetch(
+        `${this.GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events?` +
+        new URLSearchParams({
+          timeMin: timeMin.toISOString(),
+          timeMax: timeMax.toISOString(),
+          singleEvents: 'true',
+          orderBy: 'startTime',
+          maxResults: '2500'
+        }),
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          }
         }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        if (response.status === 401) {
+          throw new Error('Calendar access token expired');
+        }
+        throw new Error(errorData.error?.message || `Failed to fetch events for calendar ${calendarId}`);
       }
-    );
 
-    if (!response.ok) {
-      throw new Error(`Google Calendar API error: ${response.statusText}`);
+      const data = await response.json();
+      
+      if (!data?.items?.length) {
+        return [];
+      }
+
+      return data.items
+        .filter((item: any) => 
+          item?.status !== 'cancelled' && 
+          item?.summary &&
+          (item?.start?.dateTime || item?.start?.date) &&
+          (item?.end?.dateTime || item?.end?.date)
+        )
+        .map((item: any) => ({
+          id: crypto.randomUUID(),
+          google_event_id: item.id,
+          title: item.summary,
+          description: item.description || '',
+          location: item.location || '',
+          start_time: item.start.dateTime || item.start.date,
+          end_time: item.end.dateTime || item.end.date,
+          type: this.determineEventType(item.summary),
+          source: 'google',
+          status: 'pending'
+        }));
+    } catch (error) {
+      logger.error(`Error fetching events for calendar ${calendarId}:`, error);
+      throw error instanceof Error ? error : new Error(`Failed to fetch events for calendar ${calendarId}`);
     }
-
-    const data = await response.json();
-    
-    return data.items
-      .filter((item: any) => item.status !== 'cancelled')
-      .map((item: any) => ({
-        id: crypto.randomUUID(),
-        google_event_id: item.id,
-        title: item.summary || 'Untitled Event',
-        description: item.description || '',
-        location: item.location || '',
-        start_time: item.start.dateTime || item.start.date,
-        end_time: item.end.dateTime || item.end.date,
-        type: this.determineEventType(item.summary || ''),
-        source: 'google'
-      }));
   }
 
   private static determineEventType(title: string): Event['type'] {

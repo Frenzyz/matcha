@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Check } from 'lucide-react';
+import { Calendar, Check, AlertCircle, Loader2 } from 'lucide-react';
 import { CalendarService } from '../services/calendar';
-import LoadingSpinner from './LoadingSpinner';
 import { useAuth } from '../context/AuthContext';
 
 interface CalendarInfo {
   id: string;
   summary: string;
   primary?: boolean;
+  description?: string;
+  backgroundColor?: string;
 }
 
 interface CalendarSetupProps {
@@ -21,20 +22,32 @@ export default function CalendarSetup({ token, onComplete, onError }: CalendarSe
   const [selectedCalendars, setSelectedCalendars] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
 
   useEffect(() => {
     const fetchCalendars = async () => {
+      if (!token) {
+        setError('Invalid access token');
+        onError(new Error('Invalid access token'));
+        setLoading(false);
+        return;
+      }
+
       try {
+        setLoading(true);
+        setError(null);
         const calendarList = await CalendarService.listCalendars(token);
         setCalendars(calendarList);
-        // Auto-select primary calendar
+        
         const primaryCalendar = calendarList.find(cal => cal.primary);
         if (primaryCalendar) {
           setSelectedCalendars([primaryCalendar.id]);
         }
       } catch (error) {
-        onError(error instanceof Error ? error : new Error('Failed to fetch calendars'));
+        const errorMessage = error instanceof Error ? error.message : 'Failed to fetch calendars';
+        setError(errorMessage);
+        onError(new Error(errorMessage));
       } finally {
         setLoading(false);
       }
@@ -44,30 +57,40 @@ export default function CalendarSetup({ token, onComplete, onError }: CalendarSe
   }, [token, onError]);
 
   const handleSave = async () => {
-    if (!user) return;
+    if (!user) {
+      setError('User not authenticated');
+      return;
+    }
     
     if (selectedCalendars.length === 0) {
-      onError(new Error('Please select at least one calendar'));
+      setError('Please select at least one calendar');
       return;
     }
 
     try {
       setSaving(true);
+      setError(null);
       await CalendarService.saveCalendarPreferences(user.id, {
         token,
         selectedCalendars
       });
-      await CalendarService.syncGoogleEvents(user.id, token, selectedCalendars);
       onComplete();
     } catch (error) {
-      onError(error instanceof Error ? error : new Error('Failed to save calendar preferences'));
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save calendar preferences';
+      setError(errorMessage);
+      onError(new Error(errorMessage));
     } finally {
       setSaving(false);
     }
   };
 
   if (loading) {
-    return <LoadingSpinner />;
+    return (
+      <div className="flex flex-col items-center justify-center p-8">
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+        <p className="mt-4 text-gray-600 dark:text-gray-400">Loading calendars...</p>
+      </div>
+    );
   }
 
   return (
@@ -81,6 +104,15 @@ export default function CalendarSetup({ token, onComplete, onError }: CalendarSe
           Select which calendars you want to sync with Matcha
         </p>
       </div>
+
+      {error && (
+        <div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20">
+          <div className="flex items-center">
+            <AlertCircle className="h-5 w-5 text-red-400" />
+            <p className="ml-3 text-sm text-red-700 dark:text-red-400">{error}</p>
+          </div>
+        </div>
+      )}
 
       <div className="space-y-3">
         {calendars.map((calendar) => (
@@ -100,14 +132,21 @@ export default function CalendarSetup({ token, onComplete, onError }: CalendarSe
               }}
               className="h-4 w-4 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500"
             />
-            <span className="ml-3 flex-1 text-gray-900 dark:text-white">
-              {calendar.summary}
+            <div className="ml-3 flex-1">
+              <span className="text-gray-900 dark:text-white font-medium">
+                {calendar.summary}
+              </span>
+              {calendar.description && (
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {calendar.description}
+                </p>
+              )}
               {calendar.primary && (
                 <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">
                   Primary
                 </span>
               )}
-            </span>
+            </div>
           </label>
         ))}
       </div>
@@ -116,9 +155,17 @@ export default function CalendarSetup({ token, onComplete, onError }: CalendarSe
         <button
           onClick={handleSave}
           disabled={selectedCalendars.length === 0 || saving}
-          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-white transition-colors ${
+            selectedCalendars.length === 0 || saving
+              ? 'bg-gray-400 cursor-not-allowed'
+              : 'bg-emerald-600 hover:bg-emerald-700'
+          }`}
         >
-          <Check size={16} />
+          {saving ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Check className="h-4 w-4" />
+          )}
           {saving ? 'Saving...' : 'Save Preferences'}
         </button>
       </div>
