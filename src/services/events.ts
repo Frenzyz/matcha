@@ -1,6 +1,10 @@
 import { Event } from '../types';
 import { supabase } from '../config/supabase';
 import { logger } from '../utils/logger';
+import { retryOperation } from '../utils/retryOperation';
+
+const CACHE_KEY = 'cached_events';
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 export class EventService {
   static async fetchEvents(userId: string): Promise<Event[]> {
@@ -9,57 +13,62 @@ export class EventService {
     }
 
     try {
-      const { data, error } = await supabase
-        .from('calendar_events')
-        .select('*')
-        .eq('user_id', userId)
-        .order('start_time', { ascending: true });
+      // Try to get events from cache first
+      const cachedEvents = this.getCachedEvents();
+      if (cachedEvents.length > 0) {
+        return cachedEvents;
+      }
 
-      if (error) throw error;
+      const { data, error } = await retryOperation(
+        () => supabase
+          .from('calendar_events')
+          .select('*')
+          .eq('user_id', userId)
+          .order('start_time', { ascending: true }),
+        {
+          maxAttempts: 3,
+          delay: 1000,
+          onRetry: (attempt) => {
+            logger.warn(`Retrying event fetch (attempt ${attempt})`);
+          }
+        }
+      );
+
+      if (error) {
+        logger.error('Error fetching events:', error);
+        return this.getCachedEvents();
+      }
+
+      // Cache the events
+      if (data) {
+        localStorage.setItem(CACHE_KEY, JSON.stringify({
+          data,
+          timestamp: Date.now()
+        }));
+      }
+
       return data || [];
     } catch (error) {
-      logger.error('Error fetching events:', error);
-      throw error;
+      logger.error('Error in fetchEvents:', error);
+      return this.getCachedEvents();
     }
   }
 
-  static async updateEventStatus(eventId: string, userId: string, status: 'pending' | 'completed'): Promise<void> {
-    if (!eventId || !userId) {
-      throw new Error('Event ID and user ID are required');
-    }
-
+  private static getCachedEvents(): Event[] {
     try {
-      const { error } = await supabase
-        .from('calendar_events')
-        .update({
-          status,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', eventId)
-        .eq('user_id', userId);
+      const cached = localStorage.getItem(CACHE_KEY);
+      if (!cached) return [];
 
-      if (error) throw error;
+      const { data, timestamp } = JSON.parse(cached);
+      if (Date.now() - timestamp > CACHE_DURATION) {
+        localStorage.removeItem(CACHE_KEY);
+        return [];
+      }
+
+      return data;
     } catch (error) {
-      logger.error('Error updating event status:', error);
-      throw error;
-    }
-  }
-
-  static async addEvent(event: Event): Promise<void> {
-    try {
-      const { error } = await supabase
-        .from('calendar_events')
-        .insert([{
-          ...event,
-          status: 'pending',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }]);
-
-      if (error) throw error;
-    } catch (error) {
-      logger.error('Error adding event:', error);
-      throw error;
+      logger.error('Error reading cached events:', error);
+      return [];
     }
   }
 
@@ -69,16 +78,21 @@ export class EventService {
     }
 
     try {
-      const { error } = await supabase
-        .from('calendar_events')
-        .update({
-          ...event,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', event.id)
-        .eq('user_id', event.user_id);
+      const { error } = await retryOperation(
+        () => supabase
+          .from('calendar_events')
+          .update({
+            ...event,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', event.id)
+          .eq('user_id', event.user_id)
+      );
 
       if (error) throw error;
+      
+      // Invalidate cache
+      localStorage.removeItem(CACHE_KEY);
     } catch (error) {
       logger.error('Error updating event:', error);
       throw error;
@@ -91,15 +105,43 @@ export class EventService {
     }
 
     try {
-      const { error } = await supabase
-        .from('calendar_events')
-        .delete()
-        .eq('id', eventId)
-        .eq('user_id', userId);
+      const { error } = await retryOperation(
+        () => supabase
+          .from('calendar_events')
+          .delete()
+          .eq('id', eventId)
+          .eq('user_id', userId)
+      );
 
       if (error) throw error;
+      
+      // Invalidate cache
+      localStorage.removeItem(CACHE_KEY);
     } catch (error) {
       logger.error('Error deleting event:', error);
+      throw error;
+    }
+  }
+
+  static async addEvent(event: Event, userId: string): Promise<void> {
+    try {
+      const { error } = await retryOperation(
+        () => supabase
+          .from('calendar_events')
+          .insert([{
+            ...event,
+            user_id: userId,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }])
+      );
+
+      if (error) throw error;
+      
+      // Invalidate cache
+      localStorage.removeItem(CACHE_KEY);
+    } catch (error) {
+      logger.error('Error adding event:', error);
       throw error;
     }
   }

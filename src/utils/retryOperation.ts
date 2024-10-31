@@ -1,3 +1,5 @@
+import { logger } from './logger';
+
 interface RetryOptions {
   maxAttempts?: number;
   delay?: number;
@@ -55,6 +57,13 @@ export async function retryOperation<T>(
       if (onRetry) {
         onRetry(attempt, error);
       }
+
+      logger.warn(`Operation failed, retrying in ${waitTime}ms (attempt ${attempt}/${maxAttempts})`, {
+        error,
+        attempt,
+        maxAttempts,
+        waitTime
+      });
 
       await new Promise(resolve => setTimeout(resolve, waitTime));
     }
