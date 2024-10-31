@@ -15,6 +15,7 @@
     "start": "vite preview"
   },
   "dependencies": {
+    "@netlify/plugin-nextjs":"^5.8.1",
     "@supabase/supabase-js": "^2.39.7",
     "@react-oauth/google": "^0.12.1",
     "@types/cors": "^2.8.17",
