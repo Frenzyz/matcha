@@ -6,7 +6,7 @@ import { supabase } from '../config/supabase';
 import ChatMessage from './ChatMessage';
 import ChatInput from './ChatInput';
 import ErrorMessage from './ErrorMessage';
-import ChatHistory from './ChatHistory';
+import { MessageSquare, History, X } from 'lucide-react';
 
 interface ChatBotProps {
   isParentMode?: boolean;
@@ -23,6 +23,8 @@ export default function ChatBot({ isParentMode = false }: ChatBotProps) {
   ]);
   const [input, setInput] = useState('');
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const [chats, setChats] = useState<Array<{ id: string; title: string }>>([]);
   const { isDarkMode } = useThemeStore();
   const { generateStreamResponse, loading, error, clearError } = useChat();
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -31,6 +33,25 @@ export default function ChatBot({ isParentMode = false }: ChatBotProps) {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    if (user) {
+      loadChats();
+    }
+  }, [user]);
+
+  const loadChats = async () => {
+    const { data } = await supabase
+      .from('chats')
+      .select('id, title')
+      .eq('user_id', user?.id)
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    if (data) {
+      setChats(data);
+    }
+  };
 
   const saveChat = async (newMessages: typeof messages) => {
     if (!user) return;
@@ -56,6 +77,7 @@ export default function ChatBot({ isParentMode = false }: ChatBotProps) {
         setActiveChatId(data[0].id);
       }
     }
+    loadChats();
   };
 
   const handleSend = async () => {
@@ -94,11 +116,6 @@ export default function ChatBot({ isParentMode = false }: ChatBotProps) {
     }
   };
 
-  const handleNewChat = () => {
-    setMessages([messages[0]]);
-    setActiveChatId(null);
-  };
-
   const handleLoadChat = async (chatId: string) => {
     const { data, error } = await supabase
       .from('chats')
@@ -110,6 +127,7 @@ export default function ChatBot({ isParentMode = false }: ChatBotProps) {
       setMessages(data.messages);
       setActiveChatId(chatId);
     }
+    setShowHistory(false);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -120,43 +138,72 @@ export default function ChatBot({ isParentMode = false }: ChatBotProps) {
   };
 
   return (
-    <div className="flex h-[calc(100vh-5rem)]">
-      <ChatHistory 
-        messages={messages} 
-        isDarkMode={isDarkMode}
-        onNewChat={handleNewChat}
-        onLoadChat={handleLoadChat}
-        activeChat={activeChatId}
-      />
-      
-      <div className={`flex-1 flex flex-col ${isDarkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow-sm ml-64`}>
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {messages.map((message, index) => (
-            <ChatMessage
-              key={index}
-              text={message.text}
-              isBot={message.isBot}
-              isDarkMode={isDarkMode}
-            />
-          ))}
-          <div ref={messagesEndRef} />
-          {error && (
-            <ErrorMessage 
-              message={error}
-              onDismiss={clearError}
-            />
-          )}
-        </div>
+    <div className="flex flex-col h-full">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {showHistory ? (
+          <div className="space-y-2">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-medium">Recent Chats</h3>
+              <button
+                onClick={() => setShowHistory(false)}
+                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            {chats.map((chat) => (
+              <button
+                key={chat.id}
+                onClick={() => handleLoadChat(chat.id)}
+                className="w-full p-2 text-left rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <MessageSquare size={16} />
+                  <span className="truncate">{chat.title}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <>
+            {messages.map((message, index) => (
+              <ChatMessage
+                key={index}
+                text={message.text}
+                isBot={message.isBot}
+                isDarkMode={isDarkMode}
+              />
+            ))}
+            <div ref={messagesEndRef} />
+            {error && (
+              <ErrorMessage 
+                message={error}
+                onDismiss={clearError}
+              />
+            )}
+          </>
+        )}
+      </div>
 
-        <ChatInput
-          input={input}
-          setInput={setInput}
-          onSend={handleSend}
-          onKeyPress={handleKeyPress}
-          loading={loading}
-          isDarkMode={isDarkMode}
-          disabled={loading}
-        />
+      <div className="flex items-center px-4 py-2 border-t dark:border-gray-700">
+        <button
+          onClick={() => setShowHistory(!showHistory)}
+          className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+          title="Chat history"
+        >
+          <History size={20} />
+        </button>
+        <div className="flex-1 mx-2">
+          <ChatInput
+            input={input}
+            setInput={setInput}
+            onSend={handleSend}
+            onKeyPress={handleKeyPress}
+            loading={loading}
+            isDarkMode={isDarkMode}
+            disabled={loading || showHistory}
+          />
+        </div>
       </div>
     </div>
   );

@@ -9,8 +9,7 @@ import Calendar from '../components/Calendar';
 import Recommendations from '../components/Recommendations';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
-import Sidebar from '../components/Sidebar';
-import { format, addDays, isPast, isFuture, isToday } from 'date-fns';
+import { format, isPast, isFuture, isToday } from 'date-fns';
 import { Check, Clock, MapPin } from 'lucide-react';
 
 export default function Dashboard() {
@@ -75,24 +74,6 @@ export default function Dashboard() {
     }
   };
 
-  const handleMarkComplete = async (event: Event) => {
-    if (!user) return;
-
-    try {
-      const updatedEvent = {
-        ...event,
-        status: 'completed',
-        end_time: new Date().toISOString()
-      };
-
-      await EventService.updateEvent(updatedEvent);
-      const freshEvents = await EventService.fetchEvents(user.id);
-      setEvents(freshEvents);
-    } catch (err) {
-      console.error('Error marking event as complete:', err);
-    }
-  };
-
   const todayEvents = events.reduce((acc: { upcoming: Event[]; completed: Event[] }, event) => {
     if (!isToday(new Date(event.start_time))) return acc;
     
@@ -106,7 +87,7 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pt-16 flex items-center justify-center">
+      <div className="flex items-center justify-center min-h-screen">
         <LoadingSpinner />
       </div>
     );
@@ -114,7 +95,7 @@ export default function Dashboard() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pt-16 p-4">
+      <div className="p-4">
         <ErrorMessage 
           message={error}
           onRetry={loadEvents}
@@ -124,119 +105,110 @@ export default function Dashboard() {
   }
 
   return (
-    <div className={isDarkMode ? 'dark' : ''}>
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <div className="flex">
-          <Sidebar />
-          <main className="flex-1 ml-64 p-8">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <div className={`lg:col-span-1 ${isDarkMode ? 'bg-gray-800 text-white' : 'bg-white'} rounded-xl shadow-sm p-6`}>
-                <h2 className="text-lg font-semibold mb-4">Today's To-Do List</h2>
-                <div className="space-y-6">
-                  {/* Upcoming Events */}
-                  <div>
-                    <h3 className="text-sm font-medium text-emerald-600 dark:text-emerald-400 mb-3">
-                      Upcoming
-                    </h3>
-                    <div className="space-y-3">
-                      {todayEvents.upcoming.length === 0 ? (
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          No upcoming events today
-                        </p>
-                      ) : (
-                        todayEvents.upcoming.map(event => (
-                          <div
-                            key={event.id}
-                            className={`p-3 rounded-lg border ${
-                              isDarkMode 
-                                ? 'border-gray-700 hover:border-emerald-500' 
-                                : 'border-gray-100 hover:border-emerald-500'
-                            } transition-colors`}
-                          >
-                            <div className="flex justify-between items-start">
-                              <h4 className="font-medium text-sm">{event.title}</h4>
-                              <button
-                                onClick={() => handleMarkComplete(event)}
-                                className="p-1 hover:bg-emerald-100 dark:hover:bg-emerald-900/20 rounded-full transition-colors text-emerald-600 dark:text-emerald-400"
-                                title="Mark as complete"
-                              >
-                                <Check size={16} />
-                              </button>
-                            </div>
-                            <div className="mt-2 space-y-1">
-                              <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-                                <Clock size={12} />
-                                <span>{format(new Date(event.start_time), 'h:mm a')}</span>
-                              </div>
-                              {event.location && (
-                                <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-                                  <MapPin size={12} />
-                                  <span>{event.location}</span>
-                                </div>
-                              )}
-                            </div>
+    <div className="p-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Today's Events */}
+        <div className="lg:col-span-3">
+          <div className={`rounded-xl shadow-sm p-6 ${isDarkMode ? 'bg-gray-800 text-white' : 'bg-white'}`}>
+            <h2 className="text-lg font-semibold mb-4">Today's To-Do List</h2>
+            <div className="space-y-6">
+              {/* Upcoming Events */}
+              <div>
+                <h3 className="text-sm font-medium text-emerald-600 dark:text-emerald-400 mb-3">
+                  Upcoming
+                </h3>
+                <div className="space-y-3">
+                  {todayEvents.upcoming.length === 0 ? (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      No upcoming events today
+                    </p>
+                  ) : (
+                    todayEvents.upcoming.map(event => (
+                      <div
+                        key={event.id}
+                        className={`p-3 rounded-lg border ${
+                          isDarkMode 
+                            ? 'border-gray-700 hover:border-emerald-500' 
+                            : 'border-gray-100 hover:border-emerald-500'
+                        } transition-colors`}
+                      >
+                        <div className="flex justify-between items-start">
+                          <h4 className="font-medium text-sm">{event.title}</h4>
+                        </div>
+                        <div className="mt-2 space-y-1">
+                          <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                            <Clock size={12} />
+                            <span>{format(new Date(event.start_time), 'h:mm a')}</span>
                           </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Completed Events */}
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">
-                      Completed
-                    </h3>
-                    <div className="space-y-3">
-                      {todayEvents.completed.length === 0 ? (
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          No completed events today
-                        </p>
-                      ) : (
-                        todayEvents.completed.map(event => (
-                          <div
-                            key={event.id}
-                            className={`p-3 rounded-lg border ${
-                              isDarkMode 
-                                ? 'border-gray-700 bg-gray-800/50' 
-                                : 'border-gray-100 bg-gray-50'
-                            } opacity-60`}
-                          >
-                            <h4 className="font-medium text-sm line-through">{event.title}</h4>
-                            <div className="mt-2 space-y-1">
-                              <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-                                <Clock size={12} />
-                                <span>{format(new Date(event.start_time), 'h:mm a')}</span>
-                              </div>
-                              {event.location && (
-                                <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-                                  <MapPin size={12} />
-                                  <span>{event.location}</span>
-                                </div>
-                              )}
+                          {event.location && (
+                            <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                              <MapPin size={12} />
+                              <span>{event.location}</span>
                             </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
 
-              <div className="lg:col-span-2">
-                <Calendar 
-                  events={events} 
-                  onEventsChange={handleEventsChange}
-                  onClearEvents={handleClearEvents}
-                />
-              </div>
-
+              {/* Completed Events */}
               <div>
-                <div className={`${isDarkMode ? 'bg-gray-800 text-white' : 'bg-white'} rounded-xl shadow-sm p-6`}>
-                  <Recommendations />
+                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">
+                  Completed
+                </h3>
+                <div className="space-y-3">
+                  {todayEvents.completed.length === 0 ? (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      No completed events today
+                    </p>
+                  ) : (
+                    todayEvents.completed.map(event => (
+                      <div
+                        key={event.id}
+                        className={`p-3 rounded-lg border ${
+                          isDarkMode 
+                            ? 'border-gray-700 bg-gray-800/50' 
+                            : 'border-gray-100 bg-gray-50'
+                        } opacity-60`}
+                      >
+                        <h4 className="font-medium text-sm line-through">{event.title}</h4>
+                        <div className="mt-2 space-y-1">
+                          <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                            <Clock size={12} />
+                            <span>{format(new Date(event.start_time), 'h:mm a')}</span>
+                          </div>
+                          {event.location && (
+                            <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                              <MapPin size={12} />
+                              <span>{event.location}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
-          </main>
+          </div>
+        </div>
+
+        {/* Calendar */}
+        <div className="lg:col-span-6">
+          <Calendar 
+            events={events} 
+            onEventsChange={handleEventsChange}
+            onClearEvents={handleClearEvents}
+          />
+        </div>
+
+        {/* Recommendations */}
+        <div className="lg:col-span-3">
+          <div className={`rounded-xl shadow-sm p-6 ${isDarkMode ? 'bg-gray-800 text-white' : 'bg-white'}`}>
+            <Recommendations />
+          </div>
         </div>
       </div>
     </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Leaf, Bell, Settings, LogOut } from 'lucide-react';
+import { Leaf, Bell, Menu, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useUser } from '../hooks/useUser';
 import { supabase } from '../config/supabase';
@@ -13,7 +13,12 @@ interface Notification {
   read: boolean;
 }
 
-export default function Navbar() {
+interface NavbarProps {
+  toggleSidebar: () => void;
+  isSidebarOpen: boolean;
+}
+
+export default function Navbar({ toggleSidebar, isSidebarOpen }: NavbarProps) {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { userData } = useUser();
@@ -22,20 +27,6 @@ export default function Navbar() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const menuRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setMenuOpen(false);
-      }
-      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
-        setNotificationsOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   useEffect(() => {
     if (user) {
@@ -56,42 +47,29 @@ export default function Navbar() {
     }
   };
 
-  const markAsRead = async (notificationId: string) => {
-    await supabase
-      .from('notifications')
-      .update({ read: true })
-      .eq('id', notificationId);
-    
-    loadNotifications();
-  };
-
-  const handleLogout = async () => {
-    try {
-      await logout();
-      navigate('/login');
-    } catch (error) {
-      console.error('Error logging out:', error);
-    }
-  };
-
-  const toggleMenu = () => setMenuOpen(!menuOpen);
-  const toggleNotifications = () => setNotificationsOpen(!notificationsOpen);
-
   const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
-    <nav className="bg-theme-primary text-white shadow-lg fixed top-0 left-0 right-0 z-50">
-      <div className="container mx-auto px-4">
-        <div className="flex items-center justify-between h-16">
-          <Link to="/" className="flex items-center gap-2">
-            <Leaf size={28} />
-            <span className="text-xl font-bold">Matcha</span>
-          </Link>
-          
+    <nav className="bg-theme-primary w-full flex text-white shadow-lg fixed top-0 left-0 right-0 z-50">
+      <div className="flex justify-between w-full px-4">
+        <div className="flex justify-between w-full h-16">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={toggleSidebar}
+              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+            >
+              {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
+            </button>
+            <Link to="/" className="flex items-center gap-2">
+              <Leaf size={28} />
+              <span className="text-xl font-bold">Matcha</span>
+            </Link>
+          </div>
+
           <div className="flex items-center gap-6">
-            <div className="relative" ref={notifRef}>
+            <div className="relative">
               <button 
-                onClick={toggleNotifications}
+                onClick={() => setNotificationsOpen(!notificationsOpen)}
                 className="relative hover:text-white/80 transition-colors"
               >
                 <Bell size={20} />
@@ -101,35 +79,11 @@ export default function Navbar() {
                   </span>
                 )}
               </button>
-
-              {notificationsOpen && (
-                <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg py-1 text-gray-700">
-                  {notifications.length > 0 ? (
-                    notifications.map((notif) => (
-                      <div
-                        key={notif.id}
-                        className={`p-3 hover:bg-gray-50 cursor-pointer ${!notif.read ? 'bg-blue-50' : ''}`}
-                        onClick={() => markAsRead(notif.id)}
-                      >
-                        <div className="font-medium">{notif.title}</div>
-                        <p className="text-sm text-gray-500">{notif.message}</p>
-                        <span className="text-xs text-gray-400">
-                          {new Date(notif.created_at).toLocaleDateString()}
-                        </span>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="p-3 text-center text-gray-500">
-                      No notifications
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
 
-            <div className="relative" ref={menuRef}>
+            <div className="relative">
               <button
-                onClick={toggleMenu}
+                onClick={() => setMenuOpen(!menuOpen)}
                 className="flex items-center gap-2 focus:outline-none"
               >
                 {userData?.avatar_url ? (
@@ -146,28 +100,6 @@ export default function Navbar() {
                   </div>
                 )}
               </button>
-
-              {menuOpen && (
-                <div 
-                  className="absolute right-0 mt-2 w-48 rounded-lg shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5"
-                >
-                  <Link
-                    to="/settings"
-                    className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                    onClick={() => setMenuOpen(false)}
-                  >
-                    <Settings size={16} />
-                    Settings
-                  </Link>
-                  <button
-                    onClick={handleLogout}
-                    className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full"
-                  >
-                    <LogOut size={16} />
-                    Sign out
-                  </button>
-                </div>
-              )}
             </div>
           </div>
         </div>
