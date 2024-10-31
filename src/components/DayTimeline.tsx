@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { EventService } from '../services/events';
 import EventCard from './timeline/EventCard';
 import { useEventLayout } from './timeline/useEventLayout';
+import { ErrorHandler } from '../utils/errorHandler';
 
 interface DayTimelineProps {
   date: Date;
@@ -32,14 +33,16 @@ export default function DayTimeline({ date, events, isDarkMode, onEventsChange, 
     if (!editingEvent || !user) return;
 
     try {
-      await EventService.updateEvent(editingEvent);
-      const updatedEvents = events.map(e => 
-        e.id === editingEvent.id ? editingEvent : e
-      );
-      onEventsChange(updatedEvents);
-      const freshEvents = await EventService.fetchEvents(user.id);
-      onEventsChange(freshEvents);
-      setEditingEvent(null);
+      await ErrorHandler.withErrorHandling(async () => {
+        await EventService.updateEvent(editingEvent);
+        const updatedEvents = events.map(e => 
+          e.id === editingEvent.id ? editingEvent : e
+        );
+        onEventsChange(updatedEvents);
+        const freshEvents = await EventService.fetchEvents(user.id);
+        onEventsChange(freshEvents);
+        setEditingEvent(null);
+      }, 'updateEvent');
     } catch (error) {
       console.error('Error updating event:', error);
     }
@@ -49,11 +52,13 @@ export default function DayTimeline({ date, events, isDarkMode, onEventsChange, 
     if (!user || !window.confirm('Are you sure you want to delete this event?')) return;
 
     try {
-      await EventService.deleteEvent(eventId, user.id);
-      const updatedEvents = events.filter(e => e.id !== eventId);
-      onEventsChange(updatedEvents);
-      const freshEvents = await EventService.fetchEvents(user.id);
-      onEventsChange(freshEvents);
+      await ErrorHandler.withErrorHandling(async () => {
+        await EventService.deleteEvent(eventId, user.id);
+        const updatedEvents = events.filter(e => e.id !== eventId);
+        onEventsChange(updatedEvents);
+        const freshEvents = await EventService.fetchEvents(user.id);
+        onEventsChange(freshEvents);
+      }, 'deleteEvent');
     } catch (error) {
       console.error('Error deleting event:', error);
     }
@@ -71,7 +76,9 @@ export default function DayTimeline({ date, events, isDarkMode, onEventsChange, 
       height: `${((endMinutes - startMinutes) / totalMinutes) * 100}%`,
       left: `calc(5rem + ${event.left * (100 - 5)}%)`,
       width: `calc(${event.width * (100 - 5)}%)`,
-      minHeight: '60px'
+      minHeight: '60px',
+      right: 'auto',
+      pointerEvents: 'auto'
     };
   };
 
