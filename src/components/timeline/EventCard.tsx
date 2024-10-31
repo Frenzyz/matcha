@@ -4,7 +4,7 @@ import { format, parseISO } from 'date-fns';
 import { Event } from '../../types';
 
 interface EventCardProps {
-  event: Event & { width: number; left: number };
+  event: Event;
   position: {
     top: string;
     height: string;
@@ -55,7 +55,21 @@ export default function EventCard({
 
   const handleEdit = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onEdit(event);
+    // Create a clean event object without layout properties
+    const cleanEvent = {
+      id: event.id,
+      user_id: event.user_id,
+      title: event.title,
+      description: event.description,
+      location: event.location,
+      start_time: event.start_time,
+      end_time: event.end_time,
+      type: event.type,
+      status: event.status,
+      source: event.source,
+      google_event_id: event.google_event_id
+    };
+    onEdit(cleanEvent);
   };
 
   const handleDelete = (e: React.MouseEvent) => {
@@ -68,11 +82,7 @@ export default function EventCard({
       className={`absolute rounded-lg shadow-sm transition-all cursor-pointer ${
         isEditing ? 'ring-2 ring-emerald-500 ring-offset-2 dark:ring-offset-gray-800 z-20' : ''
       } ${getEventColor(event.type)}`}
-      style={{
-        ...position,
-        right: 'auto', // Prevent right-side expansion
-        pointerEvents: 'auto' // Ensure clickable area matches visible area
-      }}
+      style={position}
       onClick={handleEdit}
     >
       <div className={`p-2 h-full ${isEditing ? 'bg-white/95 dark:bg-gray-800/95 rounded-lg' : ''}`}>
