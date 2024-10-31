@@ -10,7 +10,7 @@ import Recommendations from '../components/Recommendations';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 import { format, isPast, isFuture, isToday } from 'date-fns';
-import { Check, Clock, MapPin } from 'lucide-react';
+import { Check, Clock, MapPin, CheckCircle } from 'lucide-react';
 
 export default function Dashboard() {
   const { isDarkMode } = useThemeStore();
@@ -74,6 +74,25 @@ export default function Dashboard() {
     }
   };
 
+  const handleCompleteEvent = async (eventId: string) => {
+    if (!user) return;
+
+    try {
+      const event = events.find(e => e.id === eventId);
+      if (!event) return;
+
+      const updatedEvent = {
+        ...event,
+        status: event.status === 'completed' ? 'pending' : 'completed'
+      };
+
+      await EventService.updateEvent(updatedEvent);
+      setEvents(events.map(e => e.id === eventId ? updatedEvent : e));
+    } catch (err) {
+      console.error('Error updating event:', err);
+    }
+  };
+
   const todayEvents = events.reduce((acc: { upcoming: Event[]; completed: Event[] }, event) => {
     if (!isToday(new Date(event.start_time))) return acc;
     
@@ -133,19 +152,31 @@ export default function Dashboard() {
                         } transition-colors`}
                       >
                         <div className="flex justify-between items-start">
-                          <h4 className="font-medium text-sm">{event.title}</h4>
-                        </div>
-                        <div className="mt-2 space-y-1">
-                          <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-                            <Clock size={12} />
-                            <span>{format(new Date(event.start_time), 'h:mm a')}</span>
-                          </div>
-                          {event.location && (
-                            <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-                              <MapPin size={12} />
-                              <span>{event.location}</span>
+                          <div>
+                            <h4 className="font-medium text-sm">{event.title}</h4>
+                            <div className="mt-2 space-y-1">
+                              <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                                <Clock size={12} />
+                                <span>{format(new Date(event.start_time), 'h:mm a')}</span>
+                              </div>
+                              {event.location && (
+                                <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                                  <MapPin size={12} />
+                                  <span>{event.location}</span>
+                                </div>
+                              )}
                             </div>
-                          )}
+                          </div>
+                          <button
+                            onClick={() => handleCompleteEvent(event.id)}
+                            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+                            title="Mark as completed"
+                          >
+                            <CheckCircle 
+                              size={20} 
+                              className="text-gray-400 hover:text-emerald-500 transition-colors" 
+                            />
+                          </button>
                         </div>
                       </div>
                     ))
@@ -173,18 +204,32 @@ export default function Dashboard() {
                             : 'border-gray-100 bg-gray-50'
                         } opacity-60`}
                       >
-                        <h4 className="font-medium text-sm line-through">{event.title}</h4>
-                        <div className="mt-2 space-y-1">
-                          <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-                            <Clock size={12} />
-                            <span>{format(new Date(event.start_time), 'h:mm a')}</span>
-                          </div>
-                          {event.location && (
-                            <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-                              <MapPin size={12} />
-                              <span>{event.location}</span>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h4 className="font-medium text-sm line-through">{event.title}</h4>
+                            <div className="mt-2 space-y-1">
+                              <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                                <Clock size={12} />
+                                <span>{format(new Date(event.start_time), 'h:mm a')}</span>
+                              </div>
+                              {event.location && (
+                                <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                                  <MapPin size={12} />
+                                  <span>{event.location}</span>
+                                </div>
+                              )}
                             </div>
-                          )}
+                          </div>
+                          <button
+                            onClick={() => handleCompleteEvent(event.id)}
+                            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+                            title="Mark as incomplete"
+                          >
+                            <CheckCircle 
+                              size={20} 
+                              className="text-emerald-500 hover:text-gray-400 transition-colors" 
+                            />
+                          </button>
                         </div>
                       </div>
                     ))
