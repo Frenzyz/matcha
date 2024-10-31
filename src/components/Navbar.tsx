@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Leaf, Bell, Menu, X } from 'lucide-react';
+import { Leaf, Bell, Menu, X, Settings, LogOut, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useUser } from '../hooks/useUser';
 import { supabase } from '../config/supabase';
@@ -34,6 +34,20 @@ export default function Navbar({ toggleSidebar, isSidebarOpen }: NavbarProps) {
     }
   }, [user]);
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
+        setNotificationsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const loadNotifications = async () => {
     const { data } = await supabase
       .from('notifications')
@@ -44,6 +58,26 @@ export default function Navbar({ toggleSidebar, isSidebarOpen }: NavbarProps) {
 
     if (data) {
       setNotifications(data);
+    }
+  };
+
+  const markAsRead = async (notificationId: string) => {
+    await supabase
+      .from('notifications')
+      .update({ read: true })
+      .eq('id', notificationId);
+
+    setNotifications(notifications.map(n => 
+      n.id === notificationId ? { ...n, read: true } : n
+    ));
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/login');
+    } catch (error) {
+      console.error('Error logging out:', error);
     }
   };
 
@@ -67,10 +101,11 @@ export default function Navbar({ toggleSidebar, isSidebarOpen }: NavbarProps) {
           </div>
 
           <div className="flex items-center gap-6">
-            <div className="relative">
+            {/* Notifications */}
+            <div className="relative" ref={notifRef}>
               <button 
                 onClick={() => setNotificationsOpen(!notificationsOpen)}
-                className="relative hover:text-white/80 transition-colors"
+                className="relative hover:text-white/80 transition-colors p-2 hover:bg-white/10 rounded-lg"
               >
                 <Bell size={20} />
                 {unreadCount > 0 && (
@@ -79,12 +114,50 @@ export default function Navbar({ toggleSidebar, isSidebarOpen }: NavbarProps) {
                   </span>
                 )}
               </button>
+
+              {notificationsOpen && (
+                <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+                  <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      Notifications
+                    </h3>
+                  </div>
+                  <div className="max-h-96 overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <div className="p-4 text-center text-gray-500 dark:text-gray-400">
+                        No notifications
+                      </div>
+                    ) : (
+                      notifications.map(notification => (
+                        <div
+                          key={notification.id}
+                          className={`p-4 border-b border-gray-200 dark:border-gray-700 ${
+                            !notification.read ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                          }`}
+                          onClick={() => markAsRead(notification.id)}
+                        >
+                          <h4 className="text-sm font-medium text-gray-900 dark:text-white">
+                            {notification.title}
+                          </h4>
+                          <p className="text-sm text-gray-600 dark:text-gray-300">
+                            {notification.message}
+                          </p>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            {new Date(notification.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div className="relative">
+            {/* Profile Menu */}
+            <div className="relative" ref={menuRef}>
               <button
                 onClick={() => setMenuOpen(!menuOpen)}
-                className="flex items-center gap-2 focus:outline-none"
+                className="flex items-center gap-2 focus:outline-none p-2 hover:bg-white/10 rounded-lg"
               >
                 {userData?.avatar_url ? (
                   <img
@@ -100,6 +173,44 @@ export default function Navbar({ toggleSidebar, isSidebarOpen }: NavbarProps) {
                   </div>
                 )}
               </button>
+
+              {menuOpen && (
+                <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+                  <div className="p-2">
+                    <div className="px-4 py-2 text-sm text-gray-900 dark:text-white">
+                      {userData?.first_name && userData?.last_name ? (
+                        <span>{userData.first_name} {userData.last_name}</span>
+                      ) : (
+                        <span>{user?.email}</span>
+                      )}
+                    </div>
+                    <div className="border-t border-gray-200 dark:border-gray-700" />
+                    <Link
+                      to="/profile"
+                      className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      <User size={16} />
+                      Profile
+                    </Link>
+                    <Link
+                      to="/settings"
+                      className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      <Settings size={16} />
+                      Settings
+                    </Link>
+                    <button
+                      onClick={handleLogout}
+                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                    >
+                      <LogOut size={16} />
+                      Sign out
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
