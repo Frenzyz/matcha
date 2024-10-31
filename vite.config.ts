@@ -31,9 +31,13 @@ export default defineConfig({
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
-          ui: ['lucide-react', 'zustand']
+          ui: ['lucide-react', 'zustand'],
+          supabase: ['@supabase/supabase-js']
         }
       }
     }
+  },
+  optimizeDeps: {
+    include: ['@supabase/supabase-js']
   }
 });

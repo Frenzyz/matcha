@@ -27,7 +27,7 @@ export default function Signup() {
 
     try {
       if (!validateEmail(formData.email)) {
-        throw new Error('Please use your UNCC email address (@charlotte.edu or @uncc.edu)');
+        throw new Error('Please enter a valid email address');
       }
 
       if (formData.password !== formData.confirmPassword) {
@@ -66,7 +66,7 @@ export default function Signup() {
           Create your account
         </h2>
         <p className="mt-2 text-center text-sm text-gray-600">
-          Join UNCC Mentor and start your journey
+          Join Matcha and start your journey
         </p>
       </div>
 
@@ -108,11 +108,10 @@ export default function Signup() {
 
             <div>
               <label htmlFor="studentId" className="block text-sm font-medium text-gray-700">
-                Student ID
+                Student ID (Optional)
               </label>
               <input
                 type="text"
-                required
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-emerald-500 focus:border-emerald-500"
                 value={formData.studentId}
                 onChange={(e) => setFormData({ ...formData, studentId: e.target.value })}
@@ -121,7 +120,7 @@ export default function Signup() {
 
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                UNCC Email address
+                Email address
               </label>
               <input
                 type="email"
@@ -129,7 +128,7 @@ export default function Signup() {
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-emerald-500 focus:border-emerald-500"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                placeholder="your.name@charlotte.edu"
+                placeholder="Enter your email"
               />
             </div>
 

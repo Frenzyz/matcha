@@ -1,6 +1,7 @@
 import * as React from 'react';
-import { User, Session } from '@supabase/supabase-js';
+import { User, Session, AuthError } from '@supabase/supabase-js';
 import { supabase } from '../config/supabase';
+import { logger } from '../utils/logger';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -39,15 +40,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setSession(session);
-      setLoading(false);
-    });
+    // Check for existing session
+    const checkSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        
+        setUser(session?.user ?? null);
+        setSession(session);
+      } catch (err) {
+        logger.error('Session check failed:', err);
+        // Clear session on error
+        setUser(null);
+        setSession(null);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      setSession(session);
+    checkSession();
+
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN') {
+        setUser(session?.user ?? null);
+        setSession(session);
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setSession(null);
+      } else if (event === 'USER_UPDATED') {
+        setUser(session?.user ?? null);
+        setSession(session);
+      }
       setLoading(false);
     });
 
@@ -56,9 +80,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  const handleAuthError = (error: AuthError): never => {
+    logger.error('Auth error:', error);
+    throw new Error(error.message);
+  };
+
   const signup = async (credentials: SignupCredentials) => {
     try {
-      const { data, error } = await supabase.auth.signUp({
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email: credentials.email,
         password: credentials.password,
         options: {
@@ -71,16 +100,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       });
 
-      if (error) throw error;
-      if (!data.user) throw new Error('Signup failed');
+      if (authError) throw authError;
+      if (!authData.user) throw new Error('Signup failed');
 
-      // Create profile
+      // Only create profile if email confirmation is not required
+      if (!authData.session) {
+        return; // Email confirmation required
+      }
+
+      // Create profile after email confirmation
       const { error: profileError } = await supabase
         .from('profiles')
         .insert([
           {
-            id: data.user.id,
-            email: data.user.email,
+            id: authData.user.id,
+            email: authData.user.email,
             first_name: credentials.firstName,
             last_name: credentials.lastName,
             student_id: credentials.studentId,
@@ -89,10 +123,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         ]);
 
-      if (profileError) throw profileError;
+      if (profileError) {
+        logger.error('Profile creation failed:', profileError);
+        throw new Error('Failed to create user profile');
+      }
 
     } catch (error) {
-      throw new Error(error instanceof Error ? error.message : 'Signup failed');
+      if (error instanceof AuthError) {
+        handleAuthError(error);
+      }
+      throw error;
     }
   };
 
@@ -106,8 +146,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error;
       if (!data.user) throw new Error('Login failed');
 
+      // Check if profile exists
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', data.user.id)
+        .single();
+
+      // Create profile if it doesn't exist
+      if (!profile && !profileError) {
+        const { error: createError } = await supabase
+          .from('profiles')
+          .insert([{
+            id: data.user.id,
+            email: data.user.email,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }]);
+
+        if (createError) {
+          logger.error('Profile creation failed:', createError);
+          throw new Error('Failed to create user profile');
+        }
+      }
+
     } catch (error) {
-      throw new Error(error instanceof Error ? error.message : 'Login failed');
+      if (error instanceof AuthError) {
+        handleAuthError(error);
+      }
+      throw error;
     }
   };
 
@@ -123,7 +190,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
     } catch (error) {
-      throw new Error(error instanceof Error ? error.message : 'Logout failed');
+      if (error instanceof AuthError) {
+        handleAuthError(error);
+      }
+      throw error;
     }
   };
 

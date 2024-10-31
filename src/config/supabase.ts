@@ -14,7 +14,9 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
-    flowType: 'pkce'
+    flowType: 'pkce',
+    storage: window.localStorage,
+    storageKey: 'matcha-auth'
   },
   db: {
     schema: 'public'
@@ -31,12 +33,11 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
   }
 });
 
-// Email validation for UNCC domains
+// Email validation for any valid email address
 export const validateEmail = (email: string): boolean => {
   if (!email) return false;
-  const normalizedEmail = email.toLowerCase().trim();
-  const validDomains = ['@charlotte.edu', '@uncc.edu'];
-  return validDomains.some(domain => normalizedEmail.endsWith(domain));
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
 };
 
 interface RetryOptions {
@@ -124,7 +125,7 @@ export const parseSupabaseError = (error: any): string => {
   }
 
   if (message.includes('invalid email')) {
-    return 'Please use your UNCC email address (@charlotte.edu or @uncc.edu)';
+    return 'Please enter a valid email address';
   }
 
   if (message.includes('invalid login')) {
@@ -133,6 +134,10 @@ export const parseSupabaseError = (error: any): string => {
 
   if (message.includes('email not confirmed')) {
     return 'Please verify your email address before logging in';
+  }
+
+  if (error.__isAuthError) {
+    return 'Authentication failed. Please try signing in again.';
   }
 
   return error.message || 'Failed to process your request';
