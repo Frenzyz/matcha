@@ -1,93 +1,95 @@
 import { Event } from '../types';
 import { supabase } from '../config/supabase';
-
-const VALID_SOURCES = ['manual', 'scraped', 'google', 'canvas', 'demo'] as const;
-type ValidSource = typeof VALID_SOURCES[number];
+import { logger } from '../utils/logger';
 
 export class EventService {
-  static async fetchCachedEvents(userId: string): Promise<Event[]> {
+  static async fetchEvents(userId: string): Promise<Event[]> {
+    if (!userId) {
+      throw new Error('User ID is required');
+    }
+
     try {
       const { data, error } = await supabase
         .from('calendar_events')
         .select('*')
         .eq('user_id', userId)
-        .in('source', VALID_SOURCES)
-        .gte('start_time', new Date().toISOString())
-        .order('start_time', { ascending: true })
-        .limit(3);
-
-      if (error) throw error;
-      return data || [];
-    } catch (error) {
-      console.error('Error fetching cached events:', error);
-      return [];
-    }
-  }
-
-  static async cacheEvents(events: Event[], userId: string): Promise<void> {
-    try {
-      const validEvents = events.map(event => ({
-        ...event,
-        id: event.id || crypto.randomUUID(),
-        user_id: userId,
-        source: this.validateSource(event.source),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }));
-
-      const { error } = await supabase
-        .from('calendar_events')
-        .upsert(validEvents);
-
-      if (error) throw error;
-    } catch (error) {
-      console.error('Error caching events:', error);
-    }
-  }
-
-  static async addToPersonalCalendar(event: Event, userId: string): Promise<void> {
-    try {
-      const { error } = await supabase
-        .from('calendar_events')
-        .insert({
-          ...event,
-          id: crypto.randomUUID(),
-          user_id: userId,
-          source: 'manual' as ValidSource,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
-
-      if (error) throw error;
-    } catch (error) {
-      console.error('Error adding event to calendar:', error);
-    }
-  }
-
-  static async fetchPersonalEvents(userId: string): Promise<Event[]> {
-    try {
-      const { data, error } = await supabase
-        .from('calendar_events')
-        .select('*')
-        .eq('user_id', userId)
-        .in('source', VALID_SOURCES)
         .order('start_time', { ascending: true });
 
       if (error) throw error;
       return data || [];
     } catch (error) {
-      console.error('Error fetching personal events:', error);
-      return [];
+      logger.error('Error fetching events:', error);
+      throw error;
     }
   }
 
-  private static validateSource(source: string): ValidSource {
-    return VALID_SOURCES.includes(source as ValidSource) 
-      ? source as ValidSource 
-      : 'demo';
+  static async updateEventStatus(eventId: string, userId: string, status: 'pending' | 'completed'): Promise<void> {
+    if (!eventId || !userId) {
+      throw new Error('Event ID and user ID are required');
+    }
+
+    try {
+      const { error } = await supabase
+        .from('calendar_events')
+        .update({
+          status,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', eventId)
+        .eq('user_id', userId);
+
+      if (error) throw error;
+    } catch (error) {
+      logger.error('Error updating event status:', error);
+      throw error;
+    }
+  }
+
+  static async addEvent(event: Event): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('calendar_events')
+        .insert([{
+          ...event,
+          status: 'pending',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }]);
+
+      if (error) throw error;
+    } catch (error) {
+      logger.error('Error adding event:', error);
+      throw error;
+    }
+  }
+
+  static async updateEvent(event: Event): Promise<void> {
+    if (!event.id || !event.user_id) {
+      throw new Error('Event ID and user ID are required');
+    }
+
+    try {
+      const { error } = await supabase
+        .from('calendar_events')
+        .update({
+          ...event,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', event.id)
+        .eq('user_id', event.user_id);
+
+      if (error) throw error;
+    } catch (error) {
+      logger.error('Error updating event:', error);
+      throw error;
+    }
   }
 
   static async deleteEvent(eventId: string, userId: string): Promise<void> {
+    if (!eventId || !userId) {
+      throw new Error('Event ID and user ID are required');
+    }
+
     try {
       const { error } = await supabase
         .from('calendar_events')
@@ -97,7 +99,8 @@ export class EventService {
 
       if (error) throw error;
     } catch (error) {
-      console.error('Error deleting event:', error);
+      logger.error('Error deleting event:', error);
+      throw error;
     }
   }
 }

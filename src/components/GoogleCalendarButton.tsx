@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
 import { Calendar } from 'lucide-react';
+import CalendarSetup from './CalendarSetup';
 
 interface GoogleCalendarButtonProps {
   onSuccess: (token: string) => void;
@@ -8,11 +9,37 @@ interface GoogleCalendarButtonProps {
 }
 
 export default function GoogleCalendarButton({ onSuccess, onError }: GoogleCalendarButtonProps) {
+  const [token, setToken] = useState<string | null>(null);
+  const [showSetup, setShowSetup] = useState(false);
+
   const login = useGoogleLogin({
-    onSuccess: (response) => onSuccess(response.access_token),
+    onSuccess: (response) => {
+      setToken(response.access_token);
+      setShowSetup(true);
+    },
     onError: (error) => onError?.(error),
     scope: 'https://www.googleapis.com/auth/calendar.readonly',
   });
+
+  const handleSetupComplete = () => {
+    setShowSetup(false);
+    if (token) {
+      onSuccess(token);
+    }
+  };
+
+  if (showSetup && token) {
+    return (
+      <CalendarSetup
+        token={token}
+        onComplete={handleSetupComplete}
+        onError={(error) => {
+          setShowSetup(false);
+          onError?.(error);
+        }}
+      />
+    );
+  }
 
   return (
     <button

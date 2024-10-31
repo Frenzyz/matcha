@@ -1,89 +1,73 @@
 import { supabase } from '../config/supabase';
 
-interface UploadResult {
-  url: string;
-  path: string;
-}
-
-export const uploadUserFile = async (
-  userId: string, 
-  file: File, 
-  folder: string = 'documents'
-): Promise<UploadResult> => {
-  const timestamp = Date.now();
-  const filename = `${timestamp}-${file.name}`;
-  const path = `${userId}/${folder}/${filename}`;
-
+export const uploadAvatar = async (
+  userId: string,
+  file: File
+): Promise<string> => {
   try {
-    const { error: uploadError, data } = await supabase.storage
-      .from('user-files')
-      .upload(path, file);
+    const fileExt = file.name.split('.').pop()?.toLowerCase();
+    const allowedTypes = ['jpg', 'jpeg', 'png', 'gif'];
+    
+    if (!fileExt || !allowedTypes.includes(fileExt)) {
+      throw new Error('Invalid file type. Please upload a JPG, PNG, or GIF image.');
+    }
+
+    const fileName = `${userId}-${Date.now()}.${fileExt}`;
+    const filePath = `${userId}/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: true
+      });
 
     if (uploadError) throw uploadError;
-    if (!data) throw new Error('Upload failed');
 
     const { data: { publicUrl } } = supabase.storage
-      .from('user-files')
-      .getPublicUrl(data.path);
+      .from('avatars')
+      .getPublicUrl(filePath);
 
-    return { url: publicUrl, path: data.path };
-  } catch (error) {
-    console.error('Error uploading file:', error);
-    throw new Error('Failed to upload file');
-  }
-};
+    // Update profile with new avatar URL
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ 
+        avatar_url: publicUrl,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId);
 
-export const deleteUserFile = async (path: string): Promise<void> => {
-  try {
-    const { error } = await supabase.storage
-      .from('user-files')
-      .remove([path]);
-
-    if (error) throw error;
-  } catch (error) {
-    console.error('Error deleting file:', error);
-    throw new Error('Failed to delete file');
-  }
-};
-
-export const getUserFiles = async (
-  userId: string, 
-  folder: string = 'documents'
-): Promise<UploadResult[]> => {
-  try {
-    const { data, error } = await supabase.storage
-      .from('user-files')
-      .list(`${userId}/${folder}`);
-
-    if (error) throw error;
-    if (!data) return [];
-
-    return Promise.all(data.map(async (file) => {
-      const path = `${userId}/${folder}/${file.name}`;
-      const { data: { publicUrl } } = supabase.storage
-        .from('user-files')
-        .getPublicUrl(path);
-
-      return {
-        url: publicUrl,
-        path
-      };
-    }));
-  } catch (error) {
-    console.error('Error listing files:', error);
-    throw new Error('Failed to list files');
-  }
-};
-
-export const getFileUrl = async (path: string): Promise<string> => {
-  try {
-    const { data: { publicUrl } } = supabase.storage
-      .from('user-files')
-      .getPublicUrl(path);
+    if (updateError) throw updateError;
 
     return publicUrl;
   } catch (error) {
-    console.error('Error getting file URL:', error);
-    throw new Error('Failed to get file URL');
+    console.error('Error uploading avatar:', error);
+    throw error;
+  }
+};
+
+export const deleteAvatar = async (userId: string, url: string): Promise<void> => {
+  try {
+    const path = url.split('/').pop();
+    if (!path) throw new Error('Invalid avatar URL');
+
+    const { error: deleteError } = await supabase.storage
+      .from('avatars')
+      .remove([`${userId}/${path}`]);
+
+    if (deleteError) throw deleteError;
+
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ 
+        avatar_url: null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId);
+
+    if (updateError) throw updateError;
+  } catch (error) {
+    console.error('Error deleting avatar:', error);
+    throw error;
   }
 };

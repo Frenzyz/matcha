@@ -1,9 +1,8 @@
 import { Event } from '../../types';
-import { JSDOM } from 'jsdom';
 
 export async function fetchUnccEvents(): Promise<Event[]> {
   try {
-    const response = await fetch('https://campusevents.charlotte.edu/api/events', {
+    const response = await fetch('/api/events', {
       headers: {
         'Accept': 'application/json',
         'User-Agent': 'Matcha/1.0'

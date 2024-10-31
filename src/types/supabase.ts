@@ -8,9 +8,13 @@ export interface Database {
           first_name?: string;
           last_name?: string;
           student_id?: string;
+          major?: string;
+          avatar_url?: string;
           theme_color?: string;
           setup_completed?: boolean;
+          google_calendar_token?: string;
           created_at: string;
+          updated_at: string;
           last_seen?: string;
         };
         Insert: {
@@ -19,9 +23,13 @@ export interface Database {
           first_name?: string;
           last_name?: string;
           student_id?: string;
+          major?: string;
+          avatar_url?: string;
           theme_color?: string;
           setup_completed?: boolean;
+          google_calendar_token?: string;
           created_at?: string;
+          updated_at?: string;
           last_seen?: string;
         };
         Update: {
@@ -30,61 +38,50 @@ export interface Database {
           first_name?: string;
           last_name?: string;
           student_id?: string;
+          major?: string;
+          avatar_url?: string;
           theme_color?: string;
           setup_completed?: boolean;
+          google_calendar_token?: string;
           created_at?: string;
+          updated_at?: string;
           last_seen?: string;
         };
       };
-      calendar_events: {
+      assignments: {
         Row: {
           id: string;
           user_id: string;
-          google_event_id?: string;
           title: string;
           description?: string;
-          location?: string;
-          start_time: string;
-          end_time: string;
-          type: 'career' | 'academic' | 'wellness';
-          attendees: number;
-          is_recurring: boolean;
-          recurrence_rule?: string;
-          source: 'manual' | 'google' | 'canvas';
+          course: string;
+          due_date: string;
+          progress: number;
+          status: 'pending' | 'in_progress' | 'completed' | 'late';
           created_at: string;
           updated_at: string;
         };
         Insert: {
           id?: string;
           user_id: string;
-          google_event_id?: string;
           title: string;
           description?: string;
-          location?: string;
-          start_time: string;
-          end_time: string;
-          type: 'career' | 'academic' | 'wellness';
-          attendees?: number;
-          is_recurring?: boolean;
-          recurrence_rule?: string;
-          source?: 'manual' | 'google' | 'canvas';
+          course: string;
+          due_date: string;
+          progress?: number;
+          status?: 'pending' | 'in_progress' | 'completed' | 'late';
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           id?: string;
           user_id?: string;
-          google_event_id?: string;
           title?: string;
           description?: string;
-          location?: string;
-          start_time?: string;
-          end_time?: string;
-          type?: 'career' | 'academic' | 'wellness';
-          attendees?: number;
-          is_recurring?: boolean;
-          recurrence_rule?: string;
-          source?: 'manual' | 'google' | 'canvas';
+          course?: string;
+          due_date?: string;
+          progress?: number;
+          status?: 'pending' | 'in_progress' | 'completed' | 'late';
           created_at?: string;
           updated_at?: string;
         };

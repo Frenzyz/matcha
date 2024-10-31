@@ -17,8 +17,8 @@ interface Event {
   end_time: string;
 }
 
-const HOURS_IN_DAY = 24;
-const RECOMMENDED_SLEEP = 8;
+const HOURS_IN_WEEK = 168; // 24 * 7
+const RECOMMENDED_SLEEP = 56; // 8 * 7 (weekly hours)
 const SLEEP_START = 23; // 11 PM
 const SLEEP_END = 7; // 7 AM
 
@@ -37,20 +37,26 @@ export default function TimeAnalysis() {
 
   const fetchCalendarData = async () => {
     try {
-      const startOfWeek = new Date();
-      startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+      // Get start and end of current week
+      const now = new Date();
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - now.getDay()); // Sunday
+      startOfWeek.setHours(0, 0, 0, 0);
       
-      const { data: events, error } = await supabase
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6); // Saturday
+      endOfWeek.setHours(23, 59, 59, 999);
+
+      const { data: events } = await supabase
         .from('calendar_events')
         .select('type, start_time, end_time')
         .eq('user_id', user?.id)
         .gte('start_time', startOfWeek.toISOString())
+        .lte('end_time', endOfWeek.toISOString())
         .order('start_time', { ascending: true });
 
-      if (error) throw error;
-
       const timeDistribution = calculateTimeDistribution(events || []);
-      const weekly = calculateWeeklyDistribution(events || []);
+      const weekly = calculateWeeklyDistribution(events || [], startOfWeek);
       
       setTimeData(timeDistribution);
       setWeeklyData(weekly);
@@ -61,41 +67,40 @@ export default function TimeAnalysis() {
     }
   };
 
+  const calculateEventHours = (start: Date, end: Date): number => {
+    // If start and end times are the same, count as 1 hour
+    if (start.getTime() === end.getTime()) {
+      return 1;
+    }
+    
+    // Otherwise, calculate actual duration but minimum 1 hour
+    const hours = Math.max(1, (end.getTime() - start.getTime()) / (1000 * 60 * 60));
+    return Math.round(hours);
+  };
+
   const calculateTimeDistribution = (events: Event[]): TimeData[] => {
     const distribution: Record<string, number> = {
-      sleep: RECOMMENDED_SLEEP * 7, // Weekly sleep hours
+      sleep: RECOMMENDED_SLEEP,
       academic: 0,
       career: 0,
       wellness: 0,
-      free: (HOURS_IN_DAY - RECOMMENDED_SLEEP) * 7 // Remaining hours after sleep
+      free: HOURS_IN_WEEK - RECOMMENDED_SLEEP
     };
 
     events.forEach(event => {
       const start = new Date(event.start_time);
       const end = new Date(event.end_time);
-      let eventHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+      const eventHours = calculateEventHours(start, end);
       
-      // Check if event overlaps with sleep time
-      const startHour = start.getHours();
-      const endHour = end.getHours();
-
-      if ((startHour >= SLEEP_START || startHour < SLEEP_END) || 
-          (endHour >= SLEEP_START || endHour < SLEEP_END)) {
-        // Calculate sleep overlap
-        const sleepOverlap = calculateSleepOverlap(start, end);
-        distribution.sleep -= sleepOverlap;
-        eventHours -= sleepOverlap;
-      }
-
       if (event.type in distribution) {
         distribution[event.type] += eventHours;
         distribution.free -= eventHours;
       }
     });
 
-    // Ensure no negative values
+    // Ensure no negative values and round all values
     Object.keys(distribution).forEach(key => {
-      distribution[key] = Math.max(0, distribution[key]);
+      distribution[key] = Math.max(0, Math.round(distribution[key]));
     });
 
     return [
@@ -107,37 +112,41 @@ export default function TimeAnalysis() {
     ];
   };
 
-  const calculateSleepOverlap = (start: Date, end: Date): number => {
-    const sleepStart = new Date(start);
-    sleepStart.setHours(SLEEP_START, 0, 0, 0);
-    const sleepEnd = new Date(start);
-    sleepEnd.setHours(SLEEP_END, 0, 0, 0);
-    
-    if (sleepEnd < sleepStart) {
-      sleepEnd.setDate(sleepEnd.getDate() + 1);
-    }
-
-    const overlapStart = Math.max(start.getTime(), sleepStart.getTime());
-    const overlapEnd = Math.min(end.getTime(), sleepEnd.getTime());
-    
-    return Math.max(0, (overlapEnd - overlapStart) / (1000 * 60 * 60));
-  };
-
-  const calculateWeeklyDistribution = (events: Event[]) => {
+  const calculateWeeklyDistribution = (events: Event[], startOfWeek: Date) => {
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    return days.map(day => {
+    
+    return days.map((day, index) => {
+      const dayStart = new Date(startOfWeek);
+      dayStart.setDate(startOfWeek.getDate() + index);
+      dayStart.setHours(0, 0, 0, 0);
+      
+      const dayEnd = new Date(dayStart);
+      dayEnd.setHours(23, 59, 59, 999);
+
       const dayEvents = events.filter(event => {
-        const eventDay = new Date(event.start_time).getDay();
-        return days[eventDay] === day;
+        const eventStart = new Date(event.start_time);
+        return eventStart >= dayStart && eventStart <= dayEnd;
       });
 
-      return {
+      const dayDistribution = {
         name: day,
-        sleep: RECOMMENDED_SLEEP,
-        academic: dayEvents.filter(e => e.type === 'academic').length,
-        career: dayEvents.filter(e => e.type === 'career').length,
-        wellness: dayEvents.filter(e => e.type === 'wellness').length
+        sleep: Math.round(RECOMMENDED_SLEEP / 7), // Daily sleep hours
+        academic: 0,
+        career: 0,
+        wellness: 0
       };
+
+      dayEvents.forEach(event => {
+        const start = new Date(event.start_time);
+        const end = new Date(event.end_time);
+        const hours = calculateEventHours(start, end);
+        
+        if (event.type in dayDistribution) {
+          dayDistribution[event.type as keyof typeof dayDistribution] += hours;
+        }
+      });
+
+      return dayDistribution;
     });
   };
 
@@ -145,11 +154,11 @@ export default function TimeAnalysis() {
 
   return (
     <div className={`p-6 rounded-lg shadow-sm ${isDarkMode ? 'bg-gray-800 text-white' : 'bg-white'}`}>
-      <h2 className="text-2xl font-bold mb-6">Time Analysis</h2>
+      <h2 className="text-2xl font-bold mb-6">Weekly Time Analysis</h2>
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div>
-          <h3 className="text-lg font-semibold mb-4">Weekly Distribution</h3>
+          <h3 className="text-lg font-semibold mb-4">Time Distribution</h3>
           <div className="h-[400px]">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -166,7 +175,7 @@ export default function TimeAnalysis() {
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value: number) => `${Math.round(value * 10) / 10} hours`} />
+                <Tooltip formatter={(value: number) => `${Math.round(value)} hours`} />
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
@@ -181,7 +190,7 @@ export default function TimeAnalysis() {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />
                 <YAxis />
-                <Tooltip />
+                <Tooltip formatter={(value: number) => `${Math.round(value)} hours`} />
                 <Legend />
                 <Bar dataKey="sleep" fill="#4B5563" stackId="a" />
                 <Bar dataKey="academic" fill="#10B981" stackId="a" />
@@ -197,16 +206,16 @@ export default function TimeAnalysis() {
         {timeData.map((item) => (
           <div key={item.name} className="flex items-center gap-2">
             <div className="w-4 h-4 rounded-full" style={{ backgroundColor: item.color }} />
-            <span>{item.name}: {Math.round(item.value * 10) / 10} hours</span>
+            <span>{item.name}: {Math.round(item.value)} hours</span>
           </div>
         ))}
       </div>
 
       <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-        <h4 className="font-semibold mb-2">Sleep Schedule Analysis</h4>
+        <h4 className="font-semibold mb-2">Weekly Analysis</h4>
         <p className="text-sm">
-          Based on recommended {RECOMMENDED_SLEEP} hours of sleep per day ({SLEEP_START}:00 - {SLEEP_END}:00).
-          Adjust your schedule if actual sleep differs significantly.
+          Based on recommended {RECOMMENDED_SLEEP} hours of sleep per week ({SLEEP_START}:00 - {SLEEP_END}:00 daily).
+          Each event is counted as minimum 1 hour.
         </p>
       </div>
     </div>

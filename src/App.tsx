@@ -11,13 +11,12 @@ import ChatBot from './components/ChatBot';
 import VirtualParent from './pages/VirtualParent';
 import TimeAnalysis from './components/TimeAnalysis';
 import Scholarships from './pages/Scholarships';
-import { useUser } from './hooks/useUser';
+import { UserDataProvider } from './context/UserDataProvider';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth();
-  const { userData, loading: userLoading } = useUser();
   
-  if (loading || userLoading) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
@@ -29,10 +28,29 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" />;
   }
 
-  return <Layout>{children}</Layout>;
+  return (
+    <UserDataProvider>
+      <Layout>{children}</Layout>
+    </UserDataProvider>
+  );
 }
 
 export default function App() {
+  React.useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      console.error('Uncaught error:', {
+        message: event.message,
+        filename: event.filename,
+        lineno: event.lineno,
+        colno: event.colno,
+        error: event.error
+      });
+    };
+
+    window.addEventListener('error', handleError);
+    return () => window.removeEventListener('error', handleError);
+  }, []);
+
   return (
     <AuthProvider>
       <ErrorBoundary>
