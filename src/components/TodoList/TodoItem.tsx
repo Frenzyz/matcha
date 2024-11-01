@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Event } from '../../types';
-import { format, formatDistanceToNow } from 'date-fns';
+import { format, formatDistanceToNow, isValid } from 'date-fns';
 import { CheckCircle, Clock, MapPin, ChevronDown, Calendar } from 'lucide-react';
 
 interface TodoItemProps {
@@ -30,21 +30,59 @@ export default function TodoItem({
   };
 
   const getCompletionStatus = () => {
-    if (event.status === 'completed') {
-      const completedDate = new Date(event.updated_at || '');
+    if (event.status === 'completed' && event.updated_at) {
+      const completedDate = new Date(event.updated_at);
       const dueDate = new Date(event.end_time);
+
+      // Validate dates before using them
+      if (!isValid(completedDate) || !isValid(dueDate)) {
+        return null;
+      }
+
       const isLate = completedDate > dueDate;
 
-      if (isLate) {
-        return `Completed ${formatDistanceToNow(completedDate)} late`;
-      } else {
-        return `Completed ${formatDistanceToNow(completedDate)} early`;
+      try {
+        if (isLate) {
+          return `Completed ${formatDistanceToNow(completedDate)} late`;
+        } else {
+          return `Completed ${formatDistanceToNow(completedDate)} early`;
+        }
+      } catch (error) {
+        console.error('Error formatting date:', error);
+        return null;
       }
     }
     return null;
   };
 
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      if (!isValid(date)) {
+        return 'Invalid date';
+      }
+      return format(date, 'h:mm a');
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Invalid date';
+    }
+  };
+
+  const formatDueDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      if (!isValid(date)) {
+        return 'Invalid date';
+      }
+      return format(date, 'MMM d, h:mm a');
+    } catch (error) {
+      console.error('Error formatting due date:', error);
+      return 'Invalid date';
+    }
+  };
+
   const truncateText = (text: string, maxLength: number) => {
+    if (!text) return '';
     if (text.length <= maxLength) return text;
     return text.substring(0, maxLength - 3) + '...';
   };
@@ -77,7 +115,7 @@ export default function TodoItem({
             <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
               <Clock size={12} className="flex-shrink-0" />
               <span className="truncate">
-                {format(new Date(event.start_time), 'h:mm a')}
+                {formatDate(event.start_time)}
               </span>
             </div>
             {event.location && (
@@ -92,7 +130,7 @@ export default function TodoItem({
               <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
                 <Calendar size={12} className="flex-shrink-0" />
                 <span className="truncate">
-                  Due: {format(new Date(event.end_time), 'MMM d, h:mm a')}
+                  Due: {formatDueDate(event.end_time)}
                 </span>
               </div>
             )}
