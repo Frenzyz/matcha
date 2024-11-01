@@ -67,13 +67,13 @@ export default function TimeAnalysis() {
     }
   };
 
-  const calculateEventHours = (start: Date, end: Date): number => {
-    // If start and end times are the same, count as 1 hour
-    if (start.getTime() === end.getTime()) {
+  const calculateEventHours = (start: Date, end: Date, type: string): number => {
+    // Academic events are always counted as 1 hour
+    if (type === 'academic') {
       return 1;
     }
     
-    // Otherwise, calculate actual duration but minimum 1 hour
+    // For other event types, calculate actual duration but minimum 1 hour
     const hours = Math.max(1, (end.getTime() - start.getTime()) / (1000 * 60 * 60));
     return Math.round(hours);
   };
@@ -90,7 +90,7 @@ export default function TimeAnalysis() {
     events.forEach(event => {
       const start = new Date(event.start_time);
       const end = new Date(event.end_time);
-      const eventHours = calculateEventHours(start, end);
+      const eventHours = calculateEventHours(start, end, event.type);
       
       if (event.type in distribution) {
         distribution[event.type] += eventHours;
@@ -139,7 +139,7 @@ export default function TimeAnalysis() {
       dayEvents.forEach(event => {
         const start = new Date(event.start_time);
         const end = new Date(event.end_time);
-        const hours = calculateEventHours(start, end);
+        const hours = calculateEventHours(start, end, event.type);
         
         if (event.type in dayDistribution) {
           dayDistribution[event.type as keyof typeof dayDistribution] += hours;
@@ -215,7 +215,7 @@ export default function TimeAnalysis() {
         <h4 className="font-semibold mb-2">Weekly Analysis</h4>
         <p className="text-sm">
           Based on recommended {RECOMMENDED_SLEEP} hours of sleep per week ({SLEEP_START}:00 - {SLEEP_END}:00 daily).
-          Each event is counted as minimum 1 hour.
+          Academic events are counted as 1 hour each, while other events use their actual duration.
         </p>
       </div>
     </div>
