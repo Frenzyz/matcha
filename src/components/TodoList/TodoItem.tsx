@@ -44,6 +44,11 @@ export default function TodoItem({
     return null;
   };
 
+  const truncateText = (text: string, maxLength: number) => {
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength - 3) + '...';
+  };
+
   const completionStatus = getCompletionStatus();
 
   return (
@@ -59,38 +64,47 @@ export default function TodoItem({
       } transition-colors`}
     >
       <div className="flex justify-between items-start">
-        <div>
-          <h4 className={`font-medium text-sm ${
-            event.status === 'completed' ? 'line-through' : ''
-          }`}>
-            {event.title}
+        <div className="flex-1 min-w-0">
+          <h4 
+            className={`font-medium text-sm truncate ${
+              event.status === 'completed' ? 'line-through' : ''
+            }`}
+            title={event.title}
+          >
+            {truncateText(event.title, 40)}
           </h4>
           <div className="mt-2 space-y-1">
             <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-              <Clock size={12} />
-              <span>{format(new Date(event.start_time), 'h:mm a')}</span>
+              <Clock size={12} className="flex-shrink-0" />
+              <span className="truncate">
+                {format(new Date(event.start_time), 'h:mm a')}
+              </span>
             </div>
             {event.location && (
               <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-                <MapPin size={12} />
-                <span>{event.location}</span>
+                <MapPin size={12} className="flex-shrink-0" />
+                <span className="truncate" title={event.location}>
+                  {truncateText(event.location, 30)}
+                </span>
               </div>
             )}
             {event.end_time && (
               <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-                <Calendar size={12} />
-                <span>Due: {format(new Date(event.end_time), 'MMM d, h:mm a')}</span>
+                <Calendar size={12} className="flex-shrink-0" />
+                <span className="truncate">
+                  Due: {format(new Date(event.end_time), 'MMM d, h:mm a')}
+                </span>
               </div>
             )}
             {completionStatus && (
-              <div className="text-xs text-emerald-600 dark:text-emerald-400">
-                {completionStatus}
+              <div className="text-xs text-emerald-600 dark:text-emerald-400 truncate" title={completionStatus}>
+                {truncateText(completionStatus, 35)}
               </div>
             )}
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 ml-2 flex-shrink-0">
           <div className="relative">
             <button
               onClick={() => setShowDropdown(!showDropdown)}
@@ -108,7 +122,7 @@ export default function TodoItem({
                       <button
                         key={category}
                         onClick={() => handleMoveToCategory(category)}
-                        className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+                        className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 truncate"
                       >
                         Move to {category}
                       </button>
