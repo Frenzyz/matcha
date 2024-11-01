@@ -7,8 +7,10 @@ import { CalendarService } from '../services/calendar';
 import { Event } from '../types';
 import Calendar from '../components/Calendar';
 import Recommendations from '../components/Recommendations';
+import TodoList from '../components/TodoList/TodoList';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
+import { Switch } from '../components/ui/Switch';
 import { format, isPast, isFuture, isToday } from 'date-fns';
 import { Check, Clock, MapPin, CheckCircle } from 'lucide-react';
 
@@ -19,12 +21,34 @@ export default function Dashboard() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isAdvancedMode, setIsAdvancedMode] = useState(false);
+  const [categories, setCategories] = useState(['Upcoming', 'Completed']);
+  const [eventCategories, setEventCategories] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (user) {
       loadEvents();
+      loadSavedSettings();
     }
   }, [user, userData?.google_calendar_token]);
+
+  const loadSavedSettings = () => {
+    const savedSettings = localStorage.getItem('todoSettings');
+    if (savedSettings) {
+      const settings = JSON.parse(savedSettings);
+      setIsAdvancedMode(settings.isAdvancedMode || false);
+      setCategories(settings.categories || ['Upcoming', 'Completed']);
+      setEventCategories(settings.eventCategories || {});
+    }
+  };
+
+  const saveSettings = () => {
+    localStorage.setItem('todoSettings', JSON.stringify({
+      isAdvancedMode,
+      categories,
+      eventCategories
+    }));
+  };
 
   const loadEvents = async () => {
     if (!user) return;
@@ -32,7 +56,6 @@ export default function Dashboard() {
     try {
       setLoading(true);
       setError(null);
-
       const localEvents = await EventService.fetchEvents(user.id);
       setEvents(localEvents);
 
@@ -93,16 +116,50 @@ export default function Dashboard() {
     }
   };
 
-  const todayEvents = events.reduce((acc: { upcoming: Event[]; completed: Event[] }, event) => {
-    if (!isToday(new Date(event.start_time))) return acc;
+  const addCategory = (name: string) => {
+    setCategories([...categories, name]);
+    saveSettings();
+  };
+
+  const editCategory = (index: number, newName: string) => {
+    const newCategories = [...categories];
+    newCategories[index] = newName;
+    setCategories(newCategories);
+    saveSettings();
+  };
+
+  const deleteCategory = (index: number) => {
+    const newCategories = categories.filter((_, i) => i !== index);
+    setCategories(newCategories);
+    saveSettings();
+  };
+
+  const handleMoveEvent = async (eventId: string, targetCategory: string) => {
+    const newEventCategories = { ...eventCategories };
     
-    if (event.status === 'completed') {
-      acc.completed.push(event);
+    if (targetCategory === 'Completed') {
+      await handleCompleteEvent(eventId);
+    } else if (targetCategory === 'Upcoming') {
+      delete newEventCategories[eventId];
     } else {
-      acc.upcoming.push(event);
+      newEventCategories[eventId] = targetCategory;
     }
-    return acc;
-  }, { upcoming: [], completed: [] });
+
+    setEventCategories(newEventCategories);
+    saveSettings();
+  };
+
+  const handleCreateEvent = async (event: Event) => {
+    if (!user) return;
+
+    try {
+      await EventService.addEvent(event, user.id);
+      const updatedEvents = await EventService.fetchEvents(user.id);
+      setEvents(updatedEvents);
+    } catch (err) {
+      console.error('Error creating event:', err);
+    }
+  };
 
   if (loading) {
     return (
@@ -129,114 +186,33 @@ export default function Dashboard() {
         {/* Today's Events */}
         <div className="lg:col-span-3">
           <div className={`rounded-xl shadow-sm p-6 ${isDarkMode ? 'bg-gray-800 text-white' : 'bg-white'}`}>
-            <h2 className="text-lg font-semibold mb-4">Today's To-Do List</h2>
-            <div className="space-y-6">
-              {/* Upcoming Events */}
-              <div>
-                <h3 className="text-sm font-medium text-emerald-600 dark:text-emerald-400 mb-3">
-                  Upcoming
-                </h3>
-                <div className="space-y-3">
-                  {todayEvents.upcoming.length === 0 ? (
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      No upcoming events today
-                    </p>
-                  ) : (
-                    todayEvents.upcoming.map(event => (
-                      <div
-                        key={event.id}
-                        className={`p-3 rounded-lg border ${
-                          isDarkMode 
-                            ? 'border-gray-700 hover:border-emerald-500' 
-                            : 'border-gray-100 hover:border-emerald-500'
-                        } transition-colors`}
-                      >
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h4 className="font-medium text-sm">{event.title}</h4>
-                            <div className="mt-2 space-y-1">
-                              <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-                                <Clock size={12} />
-                                <span>{format(new Date(event.start_time), 'h:mm a')}</span>
-                              </div>
-                              {event.location && (
-                                <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-                                  <MapPin size={12} />
-                                  <span>{event.location}</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => handleCompleteEvent(event.id)}
-                            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
-                            title="Mark as completed"
-                          >
-                            <CheckCircle 
-                              size={20} 
-                              className="text-gray-400 hover:text-emerald-500 transition-colors" 
-                            />
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              {/* Completed Events */}
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">
-                  Completed
-                </h3>
-                <div className="space-y-3">
-                  {todayEvents.completed.length === 0 ? (
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      No completed events today
-                    </p>
-                  ) : (
-                    todayEvents.completed.map(event => (
-                      <div
-                        key={event.id}
-                        className={`p-3 rounded-lg border ${
-                          isDarkMode 
-                            ? 'border-gray-700 bg-gray-800/50' 
-                            : 'border-gray-100 bg-gray-50'
-                        } opacity-60`}
-                      >
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h4 className="font-medium text-sm line-through">{event.title}</h4>
-                            <div className="mt-2 space-y-1">
-                              <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-                                <Clock size={12} />
-                                <span>{format(new Date(event.start_time), 'h:mm a')}</span>
-                              </div>
-                              {event.location && (
-                                <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-                                  <MapPin size={12} />
-                                  <span>{event.location}</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => handleCompleteEvent(event.id)}
-                            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
-                            title="Mark as incomplete"
-                          >
-                            <CheckCircle 
-                              size={20} 
-                              className="text-emerald-500 hover:text-gray-400 transition-colors" 
-                            />
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold">Today's To-Do List</h2>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500">Advanced</span>
+                <Switch
+                  checked={isAdvancedMode}
+                  onCheckedChange={(checked) => {
+                    setIsAdvancedMode(checked);
+                    saveSettings();
+                  }}
+                />
               </div>
             </div>
+
+            <TodoList
+              events={events}
+              categories={categories}
+              eventCategories={eventCategories}
+              isDarkMode={isDarkMode}
+              isAdvancedMode={isAdvancedMode}
+              onAddCategory={() => addCategory(`Category ${categories.length + 1}`)}
+              onEditCategory={editCategory}
+              onDeleteCategory={deleteCategory}
+              onCompleteEvent={handleCompleteEvent}
+              onCreateEvent={handleCreateEvent}
+              onMoveEvent={handleMoveEvent}
+            />
           </div>
         </div>
 
