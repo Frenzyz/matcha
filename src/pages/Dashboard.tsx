@@ -3,15 +3,12 @@ import { useThemeStore } from '../store/themeStore';
 import { useAuth } from '../context/AuthContext';
 import { useUserData } from '../context/UserDataProvider';
 import { EventService } from '../services/events';
-import { CalendarService } from '../services/calendar';
 import { Event } from '../types';
 import Calendar from '../components/Calendar';
 import TodoList from '../components/TodoList/TodoList';
+import { Switch } from '../components/ui/Switch';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
-import { Switch } from '../components/ui/Switch';
-import { format, isPast, isFuture, isToday } from 'date-fns';
-import { Check, Clock, MapPin, CheckCircle } from 'lucide-react';
 
 export default function Dashboard() {
   const { isDarkMode } = useThemeStore();
@@ -29,70 +26,49 @@ export default function Dashboard() {
       loadEvents();
       loadSavedSettings();
     }
-  }, [user, userData?.google_calendar_token]);
-
-  const loadSavedSettings = () => {
-    const savedSettings = localStorage.getItem('todoSettings');
-    if (savedSettings) {
-      const settings = JSON.parse(savedSettings);
-      setIsAdvancedMode(settings.isAdvancedMode || false);
-      setCategories(settings.categories || ['Upcoming', 'Completed']);
-      setEventCategories(settings.eventCategories || {});
-    }
-  };
-
-  const saveSettings = () => {
-    localStorage.setItem('todoSettings', JSON.stringify({
-      isAdvancedMode,
-      categories,
-      eventCategories
-    }));
-  };
+  }, [user]);
 
   const loadEvents = async () => {
-    if (!user) return;
-
     try {
       setLoading(true);
       setError(null);
-      const localEvents = await EventService.fetchEvents(user.id);
-      setEvents(localEvents);
-
-      if (userData?.google_calendar_token && userData.google_calendar_ids?.length) {
-        try {
-          await CalendarService.syncGoogleEvents(
-            user.id,
-            userData.google_calendar_token,
-            userData.google_calendar_ids
-          );
-          const updatedEvents = await EventService.fetchEvents(user.id);
-          setEvents(updatedEvents);
-        } catch (err) {
-          console.error('Error syncing Google Calendar:', err);
-        }
-      }
+      const data = await EventService.fetchEvents(user!.id);
+      setEvents(data);
     } catch (err) {
-      setError('Failed to load events. Please try again.');
+      setError('Failed to load events. Please try again later.');
       console.error('Error loading events:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleEventsChange = async (updatedEvents: Event[]) => {
-    setEvents(updatedEvents);
+  const loadSavedSettings = () => {
+    const savedSettings = localStorage.getItem('todoSettings');
+    if (savedSettings) {
+      try {
+        const settings = JSON.parse(savedSettings);
+        setIsAdvancedMode(settings.isAdvancedMode || false);
+        if (settings.categories?.length >= 2) {
+          setCategories(settings.categories);
+        }
+        setEventCategories(settings.eventCategories || {});
+      } catch (error) {
+        console.error('Error loading saved settings:', error);
+        setCategories(['Upcoming', 'Completed']);
+        setEventCategories({});
+      }
+    }
   };
 
-  const handleClearEvents = async () => {
-    if (!user || !window.confirm('Are you sure you want to clear all events?')) return;
-
+  const saveSettings = () => {
     try {
-      await Promise.all(events.map(event => 
-        EventService.deleteEvent(event.id, user.id)
-      ));
-      setEvents([]);
-    } catch (err) {
-      console.error('Error clearing events:', err);
+      localStorage.setItem('todoSettings', JSON.stringify({
+        isAdvancedMode,
+        categories,
+        eventCategories
+      }));
+    } catch (error) {
+      console.error('Error saving settings:', error);
     }
   };
 
@@ -105,7 +81,8 @@ export default function Dashboard() {
 
       const updatedEvent = {
         ...event,
-        status: event.status === 'completed' ? 'pending' : 'completed'
+        status: event.status === 'completed' ? 'pending' : 'completed',
+        updated_at: new Date().toISOString()
       };
 
       await EventService.updateEvent(updatedEvent);
@@ -115,74 +92,73 @@ export default function Dashboard() {
     }
   };
 
-  const addCategory = (name: string) => {
-    setCategories([...categories, name]);
-    saveSettings();
-  };
-
-  const editCategory = (index: number, newName: string) => {
-    const newCategories = [...categories];
-    newCategories[index] = newName;
-    setCategories(newCategories);
-    saveSettings();
-  };
-
-  const deleteCategory = (index: number) => {
-    const newCategories = categories.filter((_, i) => i !== index);
-    setCategories(newCategories);
-    saveSettings();
-  };
-
-  const handleMoveEvent = async (eventId: string, targetCategory: string) => {
-    const newEventCategories = { ...eventCategories };
-    
-    if (targetCategory === 'Completed') {
-      await handleCompleteEvent(eventId);
-    } else if (targetCategory === 'Upcoming') {
-      delete newEventCategories[eventId];
-    } else {
-      newEventCategories[eventId] = targetCategory;
-    }
-
-    setEventCategories(newEventCategories);
-    saveSettings();
-  };
-
   const handleCreateEvent = async (event: Event) => {
     if (!user) return;
 
     try {
       await EventService.addEvent(event, user.id);
-      const updatedEvents = await EventService.fetchEvents(user.id);
-      setEvents(updatedEvents);
+      await loadEvents();
     } catch (err) {
       console.error('Error creating event:', err);
     }
   };
 
+  const handleMoveEvent = (eventId: string, targetCategory: string) => {
+    setEventCategories(prev => ({
+      ...prev,
+      [eventId]: targetCategory
+    }));
+    saveSettings();
+  };
+
+  const handleDeleteCategory = async (index: number) => {
+    const categoryToDelete = categories[index];
+    const eventsInCategory = Object.entries(eventCategories)
+      .filter(([_, category]) => category === categoryToDelete)
+      .length;
+
+    if (eventsInCategory > 0) {
+      const confirmDelete = window.confirm(
+        `This category contains ${eventsInCategory} event${eventsInCategory === 1 ? '' : 's'}. ` +
+        'Please move all events to other categories before deleting this one.'
+      );
+      if (!confirmDelete) return;
+    }
+
+    // Update event categories - move events back to Upcoming
+    const updatedEventCategories = { ...eventCategories };
+    Object.keys(updatedEventCategories).forEach(eventId => {
+      if (updatedEventCategories[eventId] === categoryToDelete) {
+        delete updatedEventCategories[eventId];
+      }
+    });
+    
+    // Remove the category
+    const newCategories = categories.filter((_, i) => i !== index);
+    
+    // Update state
+    setCategories(newCategories);
+    setEventCategories(updatedEventCategories);
+    
+    // Save changes
+    localStorage.setItem('todoSettings', JSON.stringify({
+      isAdvancedMode,
+      categories: newCategories,
+      eventCategories: updatedEventCategories
+    }));
+  };
+
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <LoadingSpinner />
-      </div>
-    );
+    return <LoadingSpinner />;
   }
 
   if (error) {
-    return (
-      <div className="p-4">
-        <ErrorMessage 
-          message={error}
-          onRetry={loadEvents}
-        />
-      </div>
-    );
+    return <ErrorMessage message={error} />;
   }
 
   return (
     <div className="p-6">
-      <div className="grid grid-cols-1 lg:grid-cols-8 gap-6">
-        {/* Today's Events */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-3">
           <div className={`rounded-xl shadow-sm p-6 ${isDarkMode ? 'bg-gray-800 text-white' : 'bg-white'}`}>
             <div className="flex justify-between items-center mb-4">
@@ -205,9 +181,18 @@ export default function Dashboard() {
               eventCategories={eventCategories}
               isDarkMode={isDarkMode}
               isAdvancedMode={isAdvancedMode}
-              onAddCategory={() => addCategory(`Category ${categories.length + 1}`)}
-              onEditCategory={editCategory}
-              onDeleteCategory={deleteCategory}
+              onAddCategory={() => {
+                const newCategories = [...categories, `Category ${categories.length + 1}`];
+                setCategories(newCategories);
+                saveSettings();
+              }}
+              onEditCategory={(index, name) => {
+                const newCategories = [...categories];
+                newCategories[index] = name;
+                setCategories(newCategories);
+                saveSettings();
+              }}
+              onDeleteCategory={handleDeleteCategory}
               onCompleteEvent={handleCompleteEvent}
               onCreateEvent={handleCreateEvent}
               onMoveEvent={handleMoveEvent}
@@ -215,12 +200,10 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Calendar */}
-        <div className="lg:col-span-5">
+        <div className="lg:col-span-6">
           <Calendar 
             events={events} 
-            onEventsChange={handleEventsChange}
-            onClearEvents={handleClearEvents}
+            onEventsChange={setEvents}
           />
         </div>
       </div>
