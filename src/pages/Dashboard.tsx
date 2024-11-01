@@ -6,7 +6,6 @@ import { EventService } from '../services/events';
 import { CalendarService } from '../services/calendar';
 import { Event } from '../types';
 import Calendar from '../components/Calendar';
-import Recommendations from '../components/Recommendations';
 import TodoList from '../components/TodoList/TodoList';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
@@ -182,7 +181,7 @@ export default function Dashboard() {
 
   return (
     <div className="p-6">
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-8 gap-6">
         {/* Today's Events */}
         <div className="lg:col-span-3">
           <div className={`rounded-xl shadow-sm p-6 ${isDarkMode ? 'bg-gray-800 text-white' : 'bg-white'}`}>
@@ -217,19 +216,12 @@ export default function Dashboard() {
         </div>
 
         {/* Calendar */}
-        <div className="lg:col-span-6">
+        <div className="lg:col-span-5">
           <Calendar 
             events={events} 
             onEventsChange={handleEventsChange}
             onClearEvents={handleClearEvents}
           />
-        </div>
-
-        {/* Recommendations */}
-        <div className="lg:col-span-3">
-          <div className={`rounded-xl shadow-sm p-6 ${isDarkMode ? 'bg-gray-800 text-white' : 'bg-white'}`}>
-            <Recommendations />
-          </div>
         </div>
       </div>
     </div>
