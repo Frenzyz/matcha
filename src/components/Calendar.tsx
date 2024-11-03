@@ -1,39 +1,79 @@
-import React, { useState, useCallback } from 'react';
-import { format, isSameDay, addMonths, subMonths, isToday, isPast, isFuture } from 'date-fns';
-import { ChevronLeft, ChevronRight, List, Calendar as CalendarIcon, Clock, MapPin, Check, Trash2 } from 'lucide-react';
+import React, { useState, useCallback, useMemo } from 'react';
+import { format, isSameDay, addMonths, subMonths, isToday, startOfMonth } from 'date-fns';
+import { ChevronLeft, ChevronRight, List, Calendar as CalendarIcon, Trash2 } from 'lucide-react';
 import { Event } from '../types';
 import { useThemeStore } from '../store/themeStore';
 import DayTimeline from './DayTimeline';
-import { EventService } from '../services/events';
-import { useAuth } from '../context/AuthContext';
 
 interface CalendarProps {
-  events?: Event[];
-  onEventsChange?: (events: Event[]) => void;
-  onClearEvents?: () => void;
+  events: Event[];
+  onEventsChange: (events: Event[]) => void;
+  onEventUpdate: (event: Event) => Promise<void>;
+  onEventDelete: (eventId: string) => Promise<void>;
 }
 
-export default function Calendar({ events = [], onEventsChange = () => {}, onClearEvents }: CalendarProps) {
+export default function Calendar({ 
+  events, 
+  onEventsChange,
+  onEventUpdate,
+  onEventDelete
+}: CalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
+  const [isDeleting, setIsDeleting] = useState(false);
   const { isDarkMode } = useThemeStore();
-  const { user } = useAuth();
 
-  const daysInMonth = new Date(
-    currentDate.getFullYear(),
-    currentDate.getMonth() + 1,
-    0
-  ).getDate();
+  const calendarDays = useMemo(() => {
+    const firstDay = startOfMonth(currentDate);
+    const firstDayOfMonth = firstDay.getDay();
+    const daysInMonth = new Date(
+      currentDate.getFullYear(),
+      currentDate.getMonth() + 1,
+      0
+    ).getDate();
 
-  const firstDayOfMonth = new Date(
-    currentDate.getFullYear(),
-    currentDate.getMonth(),
-    1
-  ).getDay();
+    return {
+      firstDayOfMonth,
+      daysInMonth,
+      days: Array.from({ length: daysInMonth }, (_, i) => i + 1),
+      previousMonthDays: Array.from({ length: firstDayOfMonth }, (_, i) => i)
+    };
+  }, [currentDate]);
 
-  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-  const previousMonthDays = Array.from({ length: firstDayOfMonth }, (_, i) => i);
+  const handleDeleteAllEvents = async () => {
+    if (!window.confirm('Are you sure you want to delete all events?')) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      await Promise.all(events.map(event => onEventDelete(event.id)));
+      onEventsChange([]);
+      setSelectedDate(null);
+    } catch (error) {
+      console.error('Error deleting events:', error);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const getEventColor = (event: Event) => {
+    const baseColor = event.color || '#10B981';
+    
+    if (event.status === 'completed') {
+      const r = parseInt(baseColor.slice(1, 3), 16);
+      const g = parseInt(baseColor.slice(3, 5), 16);
+      const b = parseInt(baseColor.slice(5, 7), 16);
+      return `rgba(${r}, ${g}, ${b}, 0.5)`;
+    }
+    
+    return baseColor;
+  };
+
+  const getEventTextColor = useCallback((event: Event) => {
+    return event.status === 'completed' ? 'text-gray-500' : 'text-gray-900 dark:text-white';
+  }, []);
 
   const getEventsForDay = useCallback((day: number) => {
     return events.filter(event => {
@@ -46,8 +86,38 @@ export default function Calendar({ events = [], onEventsChange = () => {}, onCle
     });
   }, [events, currentDate]);
 
+  const handleEventDelete = async (eventId: string) => {
+    try {
+      await onEventDelete(eventId);
+      const updatedEvents = events.filter(e => e.id !== eventId);
+      onEventsChange(updatedEvents);
+      if (selectedDate && getEventsForDay(selectedDate.getDate()).length <= 1) {
+        setSelectedDate(null);
+      }
+    } catch (error) {
+      console.error('Error deleting event:', error);
+    }
+  };
+
+  const handleEventUpdate = async (updatedEvent: Event) => {
+    try {
+      await onEventUpdate(updatedEvent);
+      const updatedEvents = events.map(event => 
+        event.id === updatedEvent.id ? updatedEvent : event
+      );
+      onEventsChange(updatedEvents);
+    } catch (error) {
+      console.error('Error updating event:', error);
+    }
+  };
+
+  const handleDayClick = (day: number) => {
+    const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+    setSelectedDate(newDate);
+  };
+
   return (
-    <div className={`lg:col-span-3 ${isDarkMode ? 'bg-gray-800 text-white' : 'bg-white'} rounded-xl shadow-sm p-6`}>
+    <div className={`lg:col-span-3 ${isDarkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-sm p-6`}>
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-4">
           <h2 className="text-lg font-semibold">
@@ -76,35 +146,42 @@ export default function Calendar({ events = [], onEventsChange = () => {}, onCle
             </button>
           </div>
         </div>
-        <div className="flex gap-2">
-          {onClearEvents && (
+
+        <div className="flex items-center gap-4">
+          {events.length > 0 && (
             <button
-              onClick={onClearEvents}
-              className="px-3 py-1.5 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+              onClick={handleDeleteAllEvents}
+              disabled={isDeleting}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors ${
+                isDeleting ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
             >
-              <Trash2 size={20} />
+              <Trash2 size={16} />
+              <span className="text-sm font-medium">Delete All</span>
             </button>
           )}
-          <button
-            onClick={() => setCurrentDate(subMonths(currentDate, 1))}
-            className={`p-2 rounded-lg transition-colors ${
-              isDarkMode 
-                ? 'hover:bg-gray-700 text-gray-300' 
-                : 'hover:bg-gray-100 text-gray-600'
-            }`}
-          >
-            <ChevronLeft size={20} />
-          </button>
-          <button
-            onClick={() => setCurrentDate(addMonths(currentDate, 1))}
-            className={`p-2 rounded-lg transition-colors ${
-              isDarkMode 
-                ? 'hover:bg-gray-700 text-gray-300' 
-                : 'hover:bg-gray-100 text-gray-600'
-            }`}
-          >
-            <ChevronRight size={20} />
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setCurrentDate(subMonths(currentDate, 1))}
+              className={`p-2 rounded-lg transition-colors ${
+                isDarkMode 
+                  ? 'hover:bg-gray-700 text-gray-300' 
+                  : 'hover:bg-gray-100 text-gray-600'
+              }`}
+            >
+              <ChevronLeft size={20} />
+            </button>
+            <button
+              onClick={() => setCurrentDate(addMonths(currentDate, 1))}
+              className={`p-2 rounded-lg transition-colors ${
+                isDarkMode 
+                  ? 'hover:bg-gray-700 text-gray-300' 
+                  : 'hover:bg-gray-100 text-gray-600'
+              }`}
+            >
+              <ChevronRight size={20} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -121,10 +198,10 @@ export default function Calendar({ events = [], onEventsChange = () => {}, onCle
             </div>
           ))}
 
-          {previousMonthDays.map(day => (
+          {calendarDays.previousMonthDays.map(day => (
             <div
               key={`prev-${day}`}
-              className={`h-24 p-1 rounded-lg ${
+              className={`h-32 p-1 rounded-lg ${
                 isDarkMode 
                   ? 'bg-gray-900/50' 
                   : 'bg-gray-50'
@@ -132,18 +209,16 @@ export default function Calendar({ events = [], onEventsChange = () => {}, onCle
             />
           ))}
 
-          {days.map(day => {
+          {calendarDays.days.map(day => {
             const dayEvents = getEventsForDay(day);
-            const isCurrentDay = 
-              day === new Date().getDate() &&
-              currentDate.getMonth() === new Date().getMonth() &&
-              currentDate.getFullYear() === new Date().getFullYear();
+            const extraEvents = dayEvents.length > 2 ? dayEvents.length - 2 : 0;
+            const isCurrentDay = isToday(new Date(currentDate.getFullYear(), currentDate.getMonth(), day));
 
             return (
               <div
                 key={day}
-                onClick={() => setSelectedDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), day))}
-                className={`h-24 p-1 rounded-lg cursor-pointer transition-colors ${
+                onClick={() => handleDayClick(day)}
+                className={`h-32 p-1 rounded-lg cursor-pointer transition-colors ${
                   isDarkMode
                     ? isCurrentDay 
                       ? 'bg-emerald-900/20 hover:bg-emerald-900/30' 
@@ -161,31 +236,22 @@ export default function Calendar({ events = [], onEventsChange = () => {}, onCle
                   {day}
                 </div>
                 <div className="mt-1 space-y-1">
-                  {dayEvents.slice(0, 3).map((event) => (
+                  {dayEvents.slice(0, 2).map((event) => (
                     <div
                       key={event.id}
-                      className={`text-xs truncate px-1.5 py-0.5 rounded-md ${
-                        isDarkMode
-                          ? event.type === 'academic'
-                            ? 'bg-emerald-900/50 text-emerald-300'
-                            : event.type === 'career'
-                              ? 'bg-blue-900/50 text-blue-300'
-                              : 'bg-purple-900/50 text-purple-300'
-                          : event.type === 'academic'
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : event.type === 'career'
-                              ? 'bg-blue-100 text-blue-700'
-                              : 'bg-purple-100 text-purple-700'
-                      }`}
+                      className={`text-xs truncate px-1.5 py-0.5 rounded-md ${getEventTextColor(event)}`}
+                      style={{ backgroundColor: getEventColor(event) }}
                     >
                       {event.title}
                     </div>
                   ))}
-                  {dayEvents.length > 3 && (
-                    <div className={`text-xs ${
-                      isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                    }`}>
-                      +{dayEvents.length - 3} more
+                  {extraEvents > 0 && (
+                    <div className="relative flex justify-end">
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+                        isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-700'
+                      }`}>
+                        +{extraEvents}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -196,31 +262,21 @@ export default function Calendar({ events = [], onEventsChange = () => {}, onCle
       ) : (
         <div className="space-y-3">
           {events
-            .filter(event => isFuture(new Date(event.start_time)))
             .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
             .map(event => (
               <div
                 key={event.id}
-                className={`p-4 rounded-lg transition-colors ${
-                  isDarkMode
-                    ? 'bg-gray-700/50 hover:bg-gray-700'
-                    : 'border border-gray-200 hover:border-emerald-500'
-                }`}
+                className={`p-4 rounded-lg transition-colors`}
+                style={{ backgroundColor: getEventColor(event) }}
               >
-                <h3 className={`font-semibold ${
-                  isDarkMode ? 'text-white' : 'text-gray-900'
-                }`}>
+                <h3 className={`font-semibold ${getEventTextColor(event)}`}>
                   {event.title}
                 </h3>
-                <p className={`text-sm ${
-                  isDarkMode ? 'text-gray-300' : 'text-gray-600'
-                }`}>
+                <p className={`text-sm ${event.status === 'completed' ? 'text-gray-500' : 'text-gray-600 dark:text-gray-300'}`}>
                   {format(new Date(event.start_time), 'PPp')}
                 </p>
                 {event.location && (
-                  <p className={`text-sm ${
-                    isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                  }`}>
+                  <p className={`text-sm ${event.status === 'completed' ? 'text-gray-500' : 'text-gray-500 dark:text-gray-400'}`}>
                     {event.location}
                   </p>
                 )}
@@ -239,6 +295,8 @@ export default function Calendar({ events = [], onEventsChange = () => {}, onCle
               )}
               isDarkMode={isDarkMode}
               onEventsChange={onEventsChange}
+              onEventUpdate={handleEventUpdate}
+              onEventDelete={handleEventDelete}
               onClose={() => setSelectedDate(null)}
             />
           </div>

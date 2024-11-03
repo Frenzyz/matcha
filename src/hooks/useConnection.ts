@@ -7,6 +7,8 @@ export function useConnection() {
   const [isSupabaseConnected, setIsSupabaseConnected] = useState(true);
   const [lastCheckTime, setLastCheckTime] = useState(0);
   const CHECK_INTERVAL = 30000; // 30 seconds
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY = 2000;
 
   const checkSupabaseConnection = useCallback(async () => {
     // Only check if enough time has passed since last check
@@ -15,22 +17,31 @@ export function useConnection() {
       return isSupabaseConnected;
     }
 
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id')
-        .limit(1)
-        .single();
-      
-      const isConnected = !error;
-      setIsSupabaseConnected(isConnected);
-      setLastCheckTime(now);
-      return isConnected;
-    } catch (err) {
-      setIsSupabaseConnected(false);
-      setLastCheckTime(now);
-      return false;
+    let retries = 0;
+    while (retries < MAX_RETRIES) {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('id')
+          .limit(1)
+          .maybeSingle();
+        
+        const isConnected = !error;
+        setIsSupabaseConnected(isConnected);
+        setLastCheckTime(now);
+        return isConnected;
+      } catch (err) {
+        retries++;
+        if (retries === MAX_RETRIES) {
+          setIsSupabaseConnected(false);
+          setLastCheckTime(now);
+          logger.error('Failed to connect to Supabase after max retries');
+          return false;
+        }
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * Math.pow(2, retries - 1)));
+      }
     }
+    return false;
   }, [isSupabaseConnected, lastCheckTime]);
 
   const handleOnline = useCallback(() => {

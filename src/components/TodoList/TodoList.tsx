@@ -3,15 +3,15 @@ import { Event } from '../../types';
 import TodoCategory from './TodoCategory';
 import { Plus, Calendar } from 'lucide-react';
 import { addDays, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
+import { useAuth } from '../../context/AuthContext';
 
 interface TodoListProps {
   events: Event[];
-  categories: string[];
-  eventCategories: Record<string, string>;
+  categories: Array<{ id: string; name: string; color: string }>;
   isDarkMode: boolean;
   isAdvancedMode: boolean;
-  onAddCategory: () => void;
-  onEditCategory: (index: number, name: string) => void;
+  onAddCategory: (name: string, color: string) => void;
+  onEditCategory: (index: number, name: string, color: string) => void;
   onDeleteCategory: (index: number) => void;
   onCompleteEvent: (eventId: string) => void;
   onCreateEvent: (event: Event) => void;
@@ -21,7 +21,6 @@ interface TodoListProps {
 export default function TodoList({
   events,
   categories,
-  eventCategories,
   isDarkMode,
   isAdvancedMode,
   onAddCategory,
@@ -31,7 +30,7 @@ export default function TodoList({
   onCreateEvent,
   onMoveEvent
 }: TodoListProps) {
-  const [timeSpan, setTimeSpan] = useState(1); // Days
+  const [timeSpan, setTimeSpan] = useState(1);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newEvent, setNewEvent] = useState({
     title: '',
@@ -40,6 +39,7 @@ export default function TodoList({
     start_time: new Date().toISOString().slice(0, 16),
     end_time: new Date().toISOString().slice(0, 16)
   });
+  const { user } = useAuth();
 
   const filterEventsByTimeSpan = (events: Event[]) => {
     const now = new Date();
@@ -53,26 +53,27 @@ export default function TodoList({
     );
   };
 
-  const getEventsForCategory = (category: string) => {
+  const getEventsForCategory = (categoryId: string) => {
     const filteredEvents = filterEventsByTimeSpan(events);
 
-    if (category === 'Completed') {
+    if (categoryId === 'completed') {
       return filteredEvents.filter(event => event.status === 'completed');
     }
-    if (category === 'Upcoming') {
+    if (categoryId === 'upcoming') {
       return filteredEvents.filter(event => 
         event.status !== 'completed' && 
-        !eventCategories[event.id]
+        !event.category_id
       );
     }
     return filteredEvents.filter(event => 
-      eventCategories[event.id] === category &&
+      event.category_id === categoryId &&
       event.status !== 'completed'
     );
   };
 
-  const handleCreateEvent = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCreateEvent = () => {
+    if (!newEvent.title.trim()) return;
+
     onCreateEvent({
       ...newEvent,
       id: crypto.randomUUID(),
@@ -80,6 +81,7 @@ export default function TodoList({
       type: 'academic',
       source: 'manual'
     } as Event);
+
     setShowCreateForm(false);
     setNewEvent({
       title: '',
@@ -88,6 +90,15 @@ export default function TodoList({
       start_time: new Date().toISOString().slice(0, 16),
       end_time: new Date().toISOString().slice(0, 16)
     });
+  };
+
+  const handleDeleteCategory = async (index: number) => {
+    if (!user) return;
+    try {
+      await onDeleteCategory(index);
+    } catch (error) {
+      console.error('Error deleting category:', error);
+    }
   };
 
   return (
@@ -119,7 +130,7 @@ export default function TodoList({
 
       {showCreateForm && (
         <div className="p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-          <form onSubmit={handleCreateEvent} className="space-y-4">
+          <form onSubmit={(e) => { e.preventDefault(); handleCreateEvent(); }} className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-1">Title</label>
               <input
@@ -183,15 +194,15 @@ export default function TodoList({
       <div className={isAdvancedMode ? 'grid grid-cols-2 gap-4' : 'space-y-4'}>
         {categories.map((category, index) => (
           <TodoCategory
-            key={category}
+            key={category.id}
             category={category}
-            events={getEventsForCategory(category)}
+            events={getEventsForCategory(category.id)}
             isDarkMode={isDarkMode}
             isAdvancedMode={isAdvancedMode}
             categories={categories}
             index={index}
-            onEditCategory={(name) => onEditCategory(index, name)}
-            onDeleteCategory={() => onDeleteCategory(index)}
+            onEditCategory={onEditCategory}
+            onDeleteCategory={() => handleDeleteCategory(index)}
             onCompleteEvent={onCompleteEvent}
             onMoveEvent={onMoveEvent}
           />
@@ -200,7 +211,7 @@ export default function TodoList({
 
       {isAdvancedMode && (
         <button
-          onClick={onAddCategory}
+          onClick={() => onAddCategory('New Category', '#10B981')}
           className="w-full flex items-center justify-center gap-2 p-2 rounded-lg border border-dashed border-gray-300 dark:border-gray-600 hover:border-emerald-500 dark:hover:border-emerald-500 transition-colors"
         >
           <Plus size={16} />

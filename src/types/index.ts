@@ -14,47 +14,15 @@ export interface Event {
   source: 'manual' | 'scraped' | 'google' | 'canvas' | 'demo' | 'calendar';
   created_at?: string;
   updated_at?: string;
+  category_id?: string | null;
+  color?: string;
 }
 
-export interface UserProfile {
-  id: string;
-  email: string;
-  first_name?: string;
-  last_name?: string;
-  student_id?: string;
-  major?: string;
-  avatar_url?: string;
-  theme_color?: string;
-  setup_completed?: boolean;
-  google_calendar_token?: string;
-  google_calendar_ids?: string[];
-  created_at: string;
-  last_seen?: string;
-}
-
-export interface Scholarship {
-  id: string;
-  title: string;
-  description: string;
-  amount: number;
-  deadline: string;
-  type: 'merit' | 'need-based' | 'research' | 'general';
-  awards: number;
-  organization: string;
-  majors?: string[];
-  requirements?: string[];
-  url: string | null;
-}
-
-export interface Assignment {
+export interface Category {
   id: string;
   user_id: string;
-  title: string;
-  description?: string;
-  course: string;
-  due_date: string;
-  progress: number;
-  status: 'pending' | 'in_progress' | 'completed' | 'late';
-  created_at?: string;
-  updated_at?: string;
+  name: string;
+  color: string;
+  created_at: string;
+  updated_at: string;
 }

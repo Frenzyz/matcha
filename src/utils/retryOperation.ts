@@ -5,6 +5,7 @@ interface RetryOptions {
   delay?: number;
   backoff?: boolean;
   onRetry?: (attempt: number, error: any) => void;
+  signal?: AbortSignal;
 }
 
 export async function retryOperation<T>(
@@ -15,19 +16,30 @@ export async function retryOperation<T>(
     maxAttempts = 3,
     delay = 1000,
     backoff = true,
-    onRetry
+    onRetry,
+    signal
   } = options;
 
   let lastError: any;
   
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      // Check if we have network connectivity
+      // Check if operation was aborted
+      if (signal?.aborted) {
+        throw new Error('Operation aborted by user');
+      }
+
+      // Check network connectivity
       if (!navigator.onLine) {
         throw new Error('No internet connection');
       }
 
-      return await operation();
+      return await Promise.race([
+        operation(),
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('Operation timed out')), 10000);
+        })
+      ]);
     } catch (error) {
       lastError = error;
       
@@ -40,12 +52,14 @@ export async function retryOperation<T>(
         const isNetworkError = 
           error.message.includes('Failed to fetch') ||
           error.message.includes('Network request failed') ||
-          error.message.includes('No internet connection');
+          error.message.includes('NetworkError') ||
+          error.message.includes('No internet connection') ||
+          error.message.includes('timeout');
 
         const isRetryableError =
           isNetworkError ||
-          error.message.includes('timeout') ||
-          error.message.includes('rate limit');
+          error.message.includes('rate limit') ||
+          error.message.includes('Connection lost');
 
         if (!isRetryableError) {
           throw error;
