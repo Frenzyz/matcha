@@ -3,7 +3,6 @@ import { Event } from '../../types';
 import TodoCategory from './TodoCategory';
 import { Plus, Calendar } from 'lucide-react';
 import { addDays, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
-import { useAuth } from '../../context/AuthContext';
 
 interface TodoListProps {
   events: Event[];
@@ -39,7 +38,6 @@ export default function TodoList({
     start_time: new Date().toISOString().slice(0, 16),
     end_time: new Date().toISOString().slice(0, 16)
   });
-  const { user } = useAuth();
 
   const filterEventsByTimeSpan = (events: Event[]) => {
     const now = new Date();
@@ -92,13 +90,23 @@ export default function TodoList({
     });
   };
 
-  const handleDeleteCategory = async (index: number) => {
-    if (!user) return;
-    try {
-      await onDeleteCategory(index);
-    } catch (error) {
-      console.error('Error deleting category:', error);
-    }
+  const handleAddNewCategory = () => {
+    // Find the highest number in existing category names
+    const existingNumbers = categories
+      .map(cat => {
+        const match = cat.name.match(/Category (\d+)/);
+        return match ? parseInt(match[1]) : 0;
+      })
+      .filter(num => !isNaN(num));
+
+    // Get the next available number
+    const nextNumber = existingNumbers.length > 0 
+      ? Math.max(...existingNumbers) + 1 
+      : categories.length + 1;
+
+    const name = `Category ${nextNumber}`;
+    const color = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
+    onAddCategory(name, color);
   };
 
   return (
@@ -202,7 +210,7 @@ export default function TodoList({
             categories={categories}
             index={index}
             onEditCategory={onEditCategory}
-            onDeleteCategory={() => handleDeleteCategory(index)}
+            onDeleteCategory={() => onDeleteCategory(index)}
             onCompleteEvent={onCompleteEvent}
             onMoveEvent={onMoveEvent}
           />
@@ -211,7 +219,7 @@ export default function TodoList({
 
       {isAdvancedMode && (
         <button
-          onClick={() => onAddCategory('New Category', '#10B981')}
+          onClick={handleAddNewCategory}
           className="w-full flex items-center justify-center gap-2 p-2 rounded-lg border border-dashed border-gray-300 dark:border-gray-600 hover:border-emerald-500 dark:hover:border-emerald-500 transition-colors"
         >
           <Plus size={16} />

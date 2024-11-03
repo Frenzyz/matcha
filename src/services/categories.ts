@@ -23,12 +23,6 @@ export class CategoryService {
     }
 
     try {
-      // Check cache first
-      const cached = this.getCachedCategories();
-      if (cached && cached.timestamp > Date.now() - this.CACHE_DURATION) {
-        return cached.categories;
-      }
-
       const { data, error } = await retryOperation(
         () => supabase
           .from('categories')
@@ -39,27 +33,16 @@ export class CategoryService {
           maxAttempts: this.MAX_RETRIES,
           delay: this.RETRY_DELAY,
           onRetry: (attempt) => {
-            logger.warn(`Retrying categories fetch (attempt ${attempt}/${this.MAX_RETRIES})`);
+            logger.warn(`Retrying categories fetch (attempt ${attempt})`);
           }
         }
       );
 
       if (error) throw error;
-
-      // If no categories exist, create default ones
-      if (!data || data.length === 0) {
-        const defaultCategories = await this.createDefaultCategories(userId);
-        return defaultCategories;
-      }
-
-      // Update cache
-      this.cacheCategories(data);
-      return data;
+      return data || [];
     } catch (error) {
       logger.error('Error fetching categories:', error);
-      // Return cached categories as fallback
-      const cached = this.getCachedCategories();
-      return cached ? cached.categories : this.getDefaultCategoryData(userId);
+      throw error;
     }
   }
 
@@ -69,18 +52,28 @@ export class CategoryService {
     }
 
     try {
-      const newCategory = {
-        user_id: userId,
-        name: name.trim(),
-        color,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
+      // Check if category already exists
+      const { data: existing } = await supabase
+        .from('categories')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('name', name)
+        .maybeSingle();
+
+      if (existing) {
+        throw new Error(`Category "${name}" already exists`);
+      }
 
       const { data, error } = await retryOperation(
         () => supabase
           .from('categories')
-          .insert([newCategory])
+          .insert([{
+            user_id: userId,
+            name: name.trim(),
+            color,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }])
           .select()
           .single(),
         {
@@ -92,8 +85,6 @@ export class CategoryService {
       if (error) throw error;
       if (!data) throw new Error('Failed to create category');
 
-      // Invalidate cache
-      localStorage.removeItem(this.CACHE_KEY);
       return data;
     } catch (error) {
       logger.error('Error adding category:', error);
@@ -107,6 +98,21 @@ export class CategoryService {
     }
 
     try {
+      // Check if new name conflicts with existing category
+      if (category.name) {
+        const { data: existing } = await supabase
+          .from('categories')
+          .select('id')
+          .eq('user_id', category.user_id)
+          .eq('name', category.name)
+          .neq('id', category.id)
+          .maybeSingle();
+
+        if (existing) {
+          throw new Error(`Category "${category.name}" already exists`);
+        }
+      }
+
       const { data, error } = await retryOperation(
         () => supabase
           .from('categories')
@@ -128,8 +134,6 @@ export class CategoryService {
       if (error) throw error;
       if (!data) throw new Error('Failed to update category');
 
-      // Invalidate cache
-      localStorage.removeItem(this.CACHE_KEY);
       return data;
     } catch (error) {
       logger.error('Error updating category:', error);
@@ -156,83 +160,9 @@ export class CategoryService {
       );
 
       if (error) throw error;
-
-      // Invalidate cache
-      localStorage.removeItem(this.CACHE_KEY);
     } catch (error) {
       logger.error('Error deleting category:', error);
       throw error;
-    }
-  }
-
-  private static async createDefaultCategories(userId: string): Promise<Category[]> {
-    try {
-      const defaultCategories = this.getDefaultCategoryData(userId);
-      const { data, error } = await retryOperation(
-        () => supabase
-          .from('categories')
-          .insert(defaultCategories)
-          .select(),
-        {
-          maxAttempts: this.MAX_RETRIES,
-          delay: this.RETRY_DELAY
-        }
-      );
-
-      if (error) throw error;
-      if (!data) throw new Error('Failed to create default categories');
-
-      // Cache the new categories
-      this.cacheCategories(data);
-      return data;
-    } catch (error) {
-      logger.error('Error creating default categories:', error);
-      return this.getDefaultCategoryData(userId);
-    }
-  }
-
-  private static getDefaultCategoryData(userId: string): Category[] {
-    return [
-      {
-        id: crypto.randomUUID(),
-        user_id: userId,
-        name: 'Upcoming',
-        color: '#10B981',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      },
-      {
-        id: crypto.randomUUID(),
-        user_id: userId,
-        name: 'Completed',
-        color: '#6B7280',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }
-    ];
-  }
-
-  private static getCachedCategories(): { categories: Category[]; timestamp: number } | null {
-    try {
-      const cached = localStorage.getItem(this.CACHE_KEY);
-      return cached ? JSON.parse(cached) : null;
-    } catch (error) {
-      logger.error('Error reading cached categories:', error);
-      return null;
-    }
-  }
-
-  private static cacheCategories(categories: Category[]): void {
-    try {
-      localStorage.setItem(
-        this.CACHE_KEY,
-        JSON.stringify({
-          categories,
-          timestamp: Date.now()
-        })
-      );
-    } catch (error) {
-      logger.error('Error caching categories:', error);
     }
   }
 }
