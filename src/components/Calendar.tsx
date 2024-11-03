@@ -91,9 +91,6 @@ export default function Calendar({
       await onEventDelete(eventId);
       const updatedEvents = events.filter(e => e.id !== eventId);
       onEventsChange(updatedEvents);
-      if (selectedDate && getEventsForDay(selectedDate.getDate()).length <= 1) {
-        setSelectedDate(null);
-      }
     } catch (error) {
       console.error('Error deleting event:', error);
     }
@@ -115,6 +112,19 @@ export default function Calendar({
     const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
     setSelectedDate(newDate);
   };
+
+  const handleTimelineClose = useCallback(() => {
+    setSelectedDate(null);
+  }, []);
+
+  const handleTimelineEventsChange = useCallback((updatedEvents: Event[]) => {
+    // Update the main events array while preserving events from other days
+    const otherDaysEvents = selectedDate ? events.filter(event => 
+      !isSameDay(new Date(event.start_time), selectedDate)
+    ) : events;
+    
+    onEventsChange([...otherDaysEvents, ...updatedEvents]);
+  }, [events, selectedDate, onEventsChange]);
 
   return (
     <div className={`lg:col-span-3 ${isDarkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-sm p-6`}>
@@ -294,10 +304,10 @@ export default function Calendar({
                 isSameDay(new Date(event.start_time), selectedDate)
               )}
               isDarkMode={isDarkMode}
-              onEventsChange={onEventsChange}
+              onEventsChange={handleTimelineEventsChange}
               onEventUpdate={handleEventUpdate}
               onEventDelete={handleEventDelete}
-              onClose={() => setSelectedDate(null)}
+              onClose={handleTimelineClose}
             />
           </div>
         </div>
