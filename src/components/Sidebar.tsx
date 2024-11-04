@@ -12,7 +12,7 @@ export default function Sidebar({ isOpen }: SidebarProps) {
   const { isDarkMode } = useThemeStore();
 
   const links = [
-    { icon: Calendar, label: 'Calendar', path: '/' },
+    { icon: Calendar, label: 'Dashboard', path: '/dashboard' },
     { icon: PieChart, label: 'Time Analysis', path: '/analysis' },
     { icon: GraduationCap, label: 'Scholarships', path: '/scholarships' },
     { icon: Settings, label: 'Settings', path: '/settings' }

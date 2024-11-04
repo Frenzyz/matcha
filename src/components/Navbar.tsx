@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Leaf, Bell, Menu, X, Settings, LogOut, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -16,9 +16,10 @@ interface Notification {
 interface NavbarProps {
   toggleSidebar: () => void;
   isSidebarOpen: boolean;
+  onLogoClick: () => void;
 }
 
-export default function Navbar({ toggleSidebar, isSidebarOpen }: NavbarProps) {
+export default function Navbar({ toggleSidebar, isSidebarOpen, onLogoClick }: NavbarProps) {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { userData } = useUser();
@@ -28,13 +29,13 @@ export default function Navbar({ toggleSidebar, isSidebarOpen }: NavbarProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (user) {
       loadNotifications();
     }
   }, [user]);
 
-  useEffect(() => {
+  React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setMenuOpen(false);
@@ -94,14 +95,16 @@ export default function Navbar({ toggleSidebar, isSidebarOpen }: NavbarProps) {
             >
               {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
-            <Link to="/" className="flex items-center gap-2">
+            <button 
+              onClick={onLogoClick}
+              className="flex items-center gap-2"
+            >
               <Leaf size={28} />
               <span className="text-xl font-bold">Matcha</span>
-            </Link>
+            </button>
           </div>
 
           <div className="flex items-center gap-6">
-            {/* Notifications */}
             <div className="relative" ref={notifRef}>
               <button 
                 onClick={() => setNotificationsOpen(!notificationsOpen)}
@@ -153,7 +156,6 @@ export default function Navbar({ toggleSidebar, isSidebarOpen }: NavbarProps) {
               )}
             </div>
 
-            {/* Profile Menu */}
             <div className="relative" ref={menuRef}>
               <button
                 onClick={() => setMenuOpen(!menuOpen)}

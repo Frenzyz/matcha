@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { MessageSquare, X } from 'lucide-react';
 import Navbar from './Navbar';
 import Sidebar from './Sidebar';
@@ -13,9 +13,17 @@ interface LayoutProps {
 export default function Layout({ children }: LayoutProps) {
   const { isDarkMode } = useThemeStore();
   const location = useLocation();
+  const navigate = useNavigate();
   const isAuthPage = ['/login', '/signup', '/canvas-setup'].includes(location.pathname);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isChatOpen, setIsChatOpen] = useState(false);
+
+  // Redirect to dashboard if trying to access public routes while authenticated
+  React.useEffect(() => {
+    if (['/'].includes(location.pathname)) {
+      navigate('/dashboard');
+    }
+  }, [location.pathname, navigate]);
 
   if (isAuthPage) {
     return <>{children}</>;
@@ -26,7 +34,8 @@ export default function Layout({ children }: LayoutProps) {
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         <Navbar 
           toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} 
-          isSidebarOpen={isSidebarOpen} 
+          isSidebarOpen={isSidebarOpen}
+          onLogoClick={() => window.location.reload()} // Add this prop
         />
         
         <div className="flex">

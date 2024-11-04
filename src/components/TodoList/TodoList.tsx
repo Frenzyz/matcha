@@ -3,6 +3,7 @@ import { Event } from '../../types';
 import TodoCategory from './TodoCategory';
 import { Plus, Calendar } from 'lucide-react';
 import { addDays, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
+import { useAuth } from '../../context/AuthContext';
 
 interface TodoListProps {
   events: Event[];
@@ -17,6 +18,15 @@ interface TodoListProps {
   onMoveEvent: (eventId: string, targetCategory: string) => void;
 }
 
+const DEFAULT_COLORS = [
+  '#10B981', // emerald
+  '#3B82F6', // blue
+  '#8B5CF6', // purple
+  '#EC4899', // pink
+  '#F59E0B', // amber
+  '#EF4444'  // red
+];
+
 export default function TodoList({
   events,
   categories,
@@ -29,6 +39,7 @@ export default function TodoList({
   onCreateEvent,
   onMoveEvent
 }: TodoListProps) {
+  const { user } = useAuth();
   const [timeSpan, setTimeSpan] = useState(1);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newEvent, setNewEvent] = useState({
@@ -70,11 +81,12 @@ export default function TodoList({
   };
 
   const handleCreateEvent = () => {
-    if (!newEvent.title.trim()) return;
+    if (!newEvent.title.trim() || !user) return;
 
     onCreateEvent({
       ...newEvent,
       id: crypto.randomUUID(),
+      user_id: user.id,
       status: 'pending',
       type: 'academic',
       source: 'manual'
@@ -91,6 +103,8 @@ export default function TodoList({
   };
 
   const handleAddNewCategory = () => {
+    if (!user) return;
+
     // Find the highest number in existing category names
     const existingNumbers = categories
       .map(cat => {
@@ -105,7 +119,13 @@ export default function TodoList({
       : categories.length + 1;
 
     const name = `Category ${nextNumber}`;
-    const color = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
+    // Get a random color from DEFAULT_COLORS or fallback to emerald if all are used
+    const usedColors = new Set(categories.map(cat => cat.color));
+    const availableColors = DEFAULT_COLORS.filter(color => !usedColors.has(color));
+    const color = availableColors.length > 0 
+      ? availableColors[Math.floor(Math.random() * availableColors.length)]
+      : DEFAULT_COLORS[0];
+
     onAddCategory(name, color);
   };
 

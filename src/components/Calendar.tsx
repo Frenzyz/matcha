@@ -6,17 +6,17 @@ import { useThemeStore } from '../store/themeStore';
 import DayTimeline from './DayTimeline';
 
 interface CalendarProps {
-  events: Event[];
-  onEventsChange: (events: Event[]) => void;
-  onEventUpdate: (event: Event) => Promise<void>;
-  onEventDelete: (eventId: string) => Promise<void>;
+  events?: Event[];
+  onEventsChange?: (events: Event[]) => void;
+  onEventUpdate?: (event: Event) => Promise<void>;
+  onEventDelete?: (eventId: string) => Promise<void>;
 }
 
 export default function Calendar({ 
-  events, 
-  onEventsChange,
-  onEventUpdate,
-  onEventDelete
+  events = [], // Provide default empty array
+  onEventsChange = () => {}, // Default no-op function
+  onEventUpdate = async () => {}, // Default no-op async function
+  onEventDelete = async () => {} // Default no-op async function
 }: CalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -118,7 +118,6 @@ export default function Calendar({
   }, []);
 
   const handleTimelineEventsChange = useCallback((updatedEvents: Event[]) => {
-    // Update the main events array while preserving events from other days
     const otherDaysEvents = selectedDate ? events.filter(event => 
       !isSameDay(new Date(event.start_time), selectedDate)
     ) : events;

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { CategoryService } from '../services/categories';
 import { logger } from '../utils/logger';
+import { supabase } from '../config/supabase';
 
 interface Category {
   id: string;
@@ -21,7 +22,7 @@ const DEFAULT_CATEGORIES: Category[] = [
   {
     id: 'upcoming',
     name: 'Upcoming',
-    color: '#10B981'
+    color: '#10B981' // Default emerald color
   },
   {
     id: 'completed',
@@ -121,7 +122,24 @@ export const useTodoStore = create<TodoState>((set, get) => ({
         throw new Error('Category ID and user ID are required');
       }
 
+      // First update all events in this category to have no category and reset color
+      const { error: updateError } = await supabase
+        .from('calendar_events')
+        .update({ 
+          category_id: null,
+          color: DEFAULT_CATEGORIES[0].color, // Reset to Upcoming category color
+          updated_at: new Date().toISOString()
+        })
+        .eq('category_id', category.id)
+        .eq('user_id', userId);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      // Then delete the category
       await CategoryService.deleteCategory(category.id, userId);
+
       set((state) => {
         const newCategories = [...state.categories];
         newCategories.splice(index, 1);

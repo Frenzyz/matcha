@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useThemeStore } from '../store/themeStore';
 import { useAuth } from '../context/AuthContext';
 import { useUserData } from '../context/UserDataProvider';
 import { EventService } from '../services/events';
-import { CategoryService } from '../services/categories';
 import { Event } from '../types';
 import Calendar from '../components/Calendar';
 import TodoList from '../components/TodoList/TodoList';
@@ -12,7 +11,11 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 import { useTodoStore } from '../store/todoStore';
 
-export default function Dashboard() {
+interface DashboardProps {
+  defaultView?: 'calendar' | 'todo';
+}
+
+export default function Dashboard({ defaultView = 'todo' }: DashboardProps) {
   const { isDarkMode } = useThemeStore();
   const { user } = useAuth();
   const { userData } = useUserData();
@@ -20,9 +23,9 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAdvancedMode, setIsAdvancedMode] = useState(false);
+  const [activeView, setActiveView] = useState(defaultView);
   const { categories, addCategory, editCategory, deleteCategory, initializeCategories } = useTodoStore();
 
-  // Load events and categories when component mounts
   useEffect(() => {
     if (user) {
       loadInitialData();
@@ -36,14 +39,10 @@ export default function Dashboard() {
       setLoading(true);
       setError(null);
 
-      // Load categories first
       await initializeCategories(user.id);
-
-      // Then load events
       const eventData = await EventService.fetchEvents(user.id);
       setEvents(eventData);
 
-      // Load saved settings
       const savedSettings = localStorage.getItem('todoSettings');
       if (savedSettings) {
         try {
@@ -61,7 +60,6 @@ export default function Dashboard() {
     }
   };
 
-  // Save settings when they change
   useEffect(() => {
     try {
       localStorage.setItem('todoSettings', JSON.stringify({
@@ -188,8 +186,8 @@ export default function Dashboard() {
 
   return (
     <div className="p-6">
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-5 xl:col-span-4">
+      <div className={`space-y-6 ${isAdvancedMode ? 'block' : 'grid grid-cols-1 lg:grid-cols-12 gap-6'}`}>
+        <div className={isAdvancedMode ? 'w-full' : 'lg:col-span-5 xl:col-span-4'}>
           <div className={`rounded-xl shadow-sm p-6 ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-semibold">Today's To-Do List</h2>
@@ -219,7 +217,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="lg:col-span-7 xl:col-span-8">
+        <div className={isAdvancedMode ? 'w-full mt-6' : 'lg:col-span-7 xl:col-span-8'}>
           <Calendar 
             events={events}
             onEventsChange={setEvents}

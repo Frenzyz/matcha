@@ -12,6 +12,10 @@ import VirtualParent from './pages/VirtualParent';
 import TimeAnalysis from './components/TimeAnalysis';
 import Scholarships from './pages/Scholarships';
 import { UserDataProvider } from './context/UserDataProvider';
+import Landing from './pages/Landing';
+import About from './pages/About';
+import New from './pages/New';
+import Upcoming from './pages/Upcoming';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth();
@@ -35,71 +39,89 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
   );
 }
 
+function PublicRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated } = useAuth();
+  
+  if (isAuthenticated) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <>{children}</>;
+}
+
 export default function App() {
-  React.useEffect(() => {
-    const handleError = (event: ErrorEvent) => {
-      console.error('Uncaught error:', {
-        message: event.message,
-        filename: event.filename,
-        lineno: event.lineno,
-        colno: event.colno,
-        error: event.error
-      });
-    };
-
-    window.addEventListener('error', handleError);
-    return () => window.removeEventListener('error', handleError);
-  }, []);
-
   return (
     <AuthProvider>
       <ErrorBoundary>
         <BrowserRouter>
           <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
+            {/* Public Routes */}
             <Route path="/" element={
+              <PublicRoute>
+                <Landing />
+              </PublicRoute>
+            } />
+            <Route path="/about" element={
+              <PublicRoute>
+                <About />
+              </PublicRoute>
+            } />
+            <Route path="/new" element={
+              <PublicRoute>
+                <New />
+              </PublicRoute>
+            } />
+            <Route path="/upcoming" element={
+              <PublicRoute>
+                <Upcoming />
+              </PublicRoute>
+            } />
+            
+            {/* Auth Routes */}
+            <Route path="/login" element={
+              <PublicRoute>
+                <Login />
+              </PublicRoute>
+            } />
+            <Route path="/signup" element={
+              <PublicRoute>
+                <Signup />
+              </PublicRoute>
+            } />
+
+            {/* Protected Routes */}
+            <Route path="/dashboard" element={
               <PrivateRoute>
-                <div className="page-transition">
-                  <Dashboard />
-                </div>
+                <Dashboard />
               </PrivateRoute>
             } />
             <Route path="/chat" element={
               <PrivateRoute>
-                <div className="page-transition">
-                  <ChatBot />
-                </div>
+                <ChatBot />
               </PrivateRoute>
             } />
             <Route path="/virtual-parent" element={
               <PrivateRoute>
-                <div className="page-transition">
-                  <VirtualParent />
-                </div>
+                <VirtualParent />
               </PrivateRoute>
             } />
             <Route path="/analysis" element={
               <PrivateRoute>
-                <div className="page-transition">
-                  <TimeAnalysis />
-                </div>
+                <TimeAnalysis />
               </PrivateRoute>
             } />
             <Route path="/scholarships" element={
               <PrivateRoute>
-                <div className="page-transition">
-                  <Scholarships />
-                </div>
+                <Scholarships />
               </PrivateRoute>
             } />
             <Route path="/settings" element={
               <PrivateRoute>
-                <div className="page-transition">
-                  <Settings />
-                </div>
+                <Settings />
               </PrivateRoute>
             } />
+
+            {/* Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>

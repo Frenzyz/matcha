@@ -33,93 +33,102 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
   }
 });
 
-// Email validation for any valid email address
+// Email validation for UNCC email addresses
 export const validateEmail = (email: string): boolean => {
   if (!email) return false;
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const emailRegex = /^[^\s@]+@charlotte\.edu$/;
   return emailRegex.test(email);
 };
 
-interface RetryOptions {
-  maxAttempts?: number;
-  initialDelay?: number;
-  maxDelay?: number;
-  timeout?: number;
-  signal?: AbortSignal;
-}
+// Retry configuration
+export const RETRY_CONFIG = {
+  maxAttempts: 3,
+  initialDelay: 1000,
+  maxDelay: 5000,
+  backoffFactor: 2
+};
 
-// Helper function for retrying operations with timeout and abort support
-export const retryOperation = async <T>(
+// Helper function for retrying operations
+export async function retryOperation<T>(
   operation: () => Promise<T>,
-  {
-    maxAttempts = 3,
-    initialDelay = 1000,
-    maxDelay = 10000,
-    timeout = 15000,
-    signal
-  }: RetryOptions = {}
-): Promise<T> => {
+  config: Partial<typeof RETRY_CONFIG> = {}
+): Promise<T> {
+  const { maxAttempts, initialDelay, maxDelay, backoffFactor } = {
+    ...RETRY_CONFIG,
+    ...config
+  };
+
   let lastError: Error | null = null;
   let attempt = 1;
 
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => {
-      reject(new Error('Operation timed out'));
-    }, timeout);
-  });
-
   while (attempt <= maxAttempts) {
     try {
-      // Check if operation was aborted
-      if (signal?.aborted) {
-        throw new Error('Operation aborted by user');
+      // Check network connectivity
+      if (!navigator.onLine) {
+        throw new Error('No internet connection');
       }
 
-      // Race between the operation and timeout
-      const result = await Promise.race([operation(), timeoutPromise]);
-      return result;
+      return await Promise.race([
+        operation(),
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('Operation timed out')), 10000);
+        })
+      ]);
     } catch (error) {
-      lastError = error instanceof Error ? error : new Error('Unknown error occurred');
+      lastError = error instanceof Error ? error : new Error('Unknown error');
       
-      // Don't retry if operation was aborted or we're on the last attempt
-      if (signal?.aborted || attempt === maxAttempts) {
+      if (attempt === maxAttempts) {
         break;
       }
 
-      // Calculate delay with exponential backoff
-      const delay = Math.min(initialDelay * Math.pow(2, attempt - 1), maxDelay);
-      
-      // Wait before retrying
+      // Only retry on network errors or specific Supabase errors
+      const isRetryableError = 
+        lastError.message.includes('Failed to fetch') ||
+        lastError.message.includes('Network request failed') ||
+        lastError.message.includes('timeout') ||
+        lastError.message.includes('rate limit');
+
+      if (!isRetryableError) {
+        throw lastError;
+      }
+
+      const delay = Math.min(
+        initialDelay * Math.pow(backoffFactor, attempt - 1),
+        maxDelay
+      );
+
+      logger.warn(`Operation failed, retrying in ${delay}ms (attempt ${attempt}/${maxAttempts})`, {
+        error: lastError,
+        attempt,
+        delay
+      });
+
       await new Promise(resolve => setTimeout(resolve, delay));
       attempt++;
     }
   }
 
   throw lastError || new Error('Operation failed after retries');
-};
+}
 
 // Parse Supabase error messages
-export const parseSupabaseError = (error: any): string => {
+export function parseSupabaseError(error: any): string {
   if (!error) return 'An unknown error occurred';
-  
+
   if (error.message?.includes('Failed to fetch')) {
     return 'Network connection error. Please check your internet connection.';
   }
-  
-  if (error.message?.includes('AbortError')) {
-    return 'Operation was cancelled.';
-  }
-  
+
   if (error.message?.includes('timeout')) {
     return 'Operation timed out. Please try again.';
   }
-  
+
   const message = error.message?.toLowerCase() || '';
-  
+
   if (message.includes('rate limit')) {
     return 'Too many attempts. Please try again later.';
   }
-  
+
   if (message.includes('already registered')) {
     return 'This email is already registered. Please sign in instead.';
   }
@@ -141,10 +150,10 @@ export const parseSupabaseError = (error: any): string => {
   }
 
   return error.message || 'Failed to process your request';
-};
+}
 
 // Check connection status with timeout
-export const checkConnection = async (timeout = 5000): Promise<boolean> => {
+export async function checkConnection(timeout = 5000): Promise<boolean> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -161,10 +170,10 @@ export const checkConnection = async (timeout = 5000): Promise<boolean> => {
     logger.error('Connection check failed:', err);
     return false;
   }
-};
+}
 
 // Handle Supabase errors with context
-export const handleSupabaseError = (error: any, context?: string): string => {
+export function handleSupabaseError(error: any, context?: string): string {
   logger.error('Supabase operation failed', { error, context });
   
   if (!navigator.onLine) {
@@ -172,4 +181,4 @@ export const handleSupabaseError = (error: any, context?: string): string => {
   }
   
   return parseSupabaseError(error);
-};
+}
