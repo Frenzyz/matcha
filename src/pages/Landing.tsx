@@ -70,16 +70,16 @@ export default function Landing() {
                 AI-Powered Insights
               </h3>
               <p className="text-gray-600">
-                Get personalized recommendations and insights to optimize your study habits.
+                Get personalized insights to optimize your study habits.
               </p>
             </div>
             <div className="p-6 rounded-xl bg-emerald-50 hover:bg-emerald-100 transition-colors">
               <Users className="h-12 w-12 text-emerald-600 mb-4" />
               <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                Virtual Parent Mode
+                Personal UNCC Assistant
               </h3>
               <p className="text-gray-600">
-                Receive caring advice and guidance with a touch of humor and encouragement.
+                Receive advice and guidance from an AI trained on UNCC Context.
               </p>
             </div>
           </div>
