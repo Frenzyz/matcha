@@ -38,20 +38,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = React.useState<User | null>(null);
   const [session, setSession] = React.useState<Session | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [initialized, setInitialized] = React.useState(false);
 
   React.useEffect(() => {
-    // Check for existing session
-    const checkSession = async () => {
+    const initializeAuth = async () => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (error) throw error;
-        
-        if (session) {
-          setUser(session.user);
-          setSession(session);
+        // Get the current session
+        const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+
+        if (currentSession) {
+          setSession(currentSession);
+          setUser(currentSession.user);
         }
-      } catch (err) {
-        logger.error('Session check failed:', err);
+
+        // Set up auth state listener
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+          logger.info('Auth state changed:', event);
+          
+          if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+            setUser(newSession?.user ?? null);
+            setSession(newSession);
+          } else if (event === 'SIGNED_OUT') {
+            setUser(null);
+            setSession(null);
+          }
+        });
+
+        setInitialized(true);
+        return () => {
+          subscription.unsubscribe();
+        };
+      } catch (error) {
+        logger.error('Error initializing auth:', error);
         setUser(null);
         setSession(null);
       } finally {
@@ -59,23 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    checkSession();
-
-    // Set up auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
-        setUser(session?.user ?? null);
-        setSession(session);
-      } else if (event === 'SIGNED_OUT') {
-        setUser(null);
-        setSession(null);
-      }
-      setLoading(false);
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
+    initializeAuth();
   }, []);
 
   const handleAuthError = (error: AuthError): never => {
@@ -93,7 +96,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error;
       if (!data.user) throw new Error('Login failed');
 
-      // Set user and session immediately
       setUser(data.user);
       setSession(data.session);
 
@@ -146,7 +148,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (authError) throw authError;
       if (!authData.user) throw new Error('Signup failed');
 
-      // Set user and session immediately
       setUser(authData.user);
       setSession(authData.session);
 
@@ -179,7 +180,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
+      if (!initialized) {
+        throw new Error('Auth not initialized');
+      }
+
       if (user) {
+        // Update last seen before logging out
         await supabase
           .from('profiles')
           .update({ last_seen: new Date().toISOString() })
@@ -189,14 +195,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
 
-      // Clear user and session
+      // Clear auth state
       setUser(null);
       setSession(null);
     } catch (error) {
-      if (error instanceof AuthError) {
-        handleAuthError(error);
-      }
-      throw error;
+      logger.error('Logout error:', error);
+      throw new Error(error instanceof Error ? error.message : 'Failed to log out');
     }
   };
 
