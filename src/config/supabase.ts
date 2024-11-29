@@ -33,10 +33,11 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
   }
 });
 
-// Email validation for UNCC email addresses
+// Email validation for any valid email address
 export const validateEmail = (email: string): boolean => {
   if (!email) return false;
-  const emailRegex = /^[^\s@]+@charlotte\.edu$/;
+  // RFC 5322 standard email regex
+  const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
   return emailRegex.test(email);
 };
 
