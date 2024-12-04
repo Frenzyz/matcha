@@ -1,5 +1,6 @@
 import { logger } from '../../utils/logger';
 import { addDays, format, startOfDay, endOfDay } from 'date-fns';
+import { EventType } from '../../types';
 
 interface ParsedCommand {
   action: 'add' | 'view' | 'update' | 'delete' | 'query';
@@ -13,20 +14,19 @@ interface ParsedCommand {
     description?: string;
     startTime?: string;
     endTime?: string;
-    type?: string;
+    type?: EventType;
   };
 }
 
 export function parseCommandResponse(response: string): ParsedCommand {
   try {
-    // Clean up the response by removing any markdown code blocks and whitespace
+    // Clean up the response
     const cleanResponse = response
       .replace(/```json\n?|\n?```/g, '')
       .replace(/^[\s\n]*\{/, '{')
       .replace(/\}[\s\n]*$/, '}')
       .trim();
 
-    // Try to parse the JSON
     let parsed: any;
     try {
       parsed = JSON.parse(cleanResponse);
@@ -35,19 +35,20 @@ export function parseCommandResponse(response: string): ParsedCommand {
       throw new Error('Invalid response format');
     }
 
-    // Handle schedule/appointment format
-    if (parsed.schedule || parsed.appointment) {
-      return convertScheduleFormat(parsed);
-    }
+    // Map event types to valid types
+    if (parsed.eventDetails?.type) {
+      const typeMap: Record<string, EventType> = {
+        exam: 'academic',
+        class: 'academic',
+        lecture: 'academic',
+        meeting: 'career',
+        interview: 'career',
+        workout: 'wellness',
+        party: 'social',
+        event: 'social'
+      };
 
-    // Handle event format
-    if (parsed.event) {
-      return convertEventFormat(parsed.event);
-    }
-
-    // Handle direct date format
-    if (parsed.date || parsed.start) {
-      return convertDateFormat(parsed);
+      parsed.eventDetails.type = typeMap[parsed.eventDetails.type.toLowerCase()] || 'social';
     }
 
     // Validate the parsed command
@@ -73,56 +74,14 @@ function validateParsedCommand(parsed: any): void {
   if (parsed.action === 'add' && (!parsed.eventDetails?.title || !parsed.dates?.start)) {
     throw new Error('Missing required event details');
   }
-}
 
-function convertScheduleFormat(parsed: any): ParsedCommand {
-  const schedule = parsed.schedule?.[0] || parsed.appointment;
-  const startDate = new Date(schedule.date || schedule.start);
-  const duration = schedule.duration?.match(/(\d+)/)?.[1] || '1';
-
-  return {
-    action: 'add',
-    dates: {
-      start: format(startDate, 'yyyy-MM-dd'),
-      end: format(startDate, 'yyyy-MM-dd')
-    },
-    eventDetails: {
-      title: schedule.event || schedule.type || 'New Event',
-      startTime: format(startDate, 'HH:mm'),
-      endTime: format(addDays(startDate, 0, parseInt(duration)), 'HH:mm'),
-      type: 'social'
+  // Ensure event type is valid
+  if (parsed.eventDetails?.type) {
+    const validTypes: EventType[] = ['academic', 'career', 'wellness', 'social'];
+    if (!validTypes.includes(parsed.eventDetails.type)) {
+      parsed.eventDetails.type = 'social';
     }
-  };
+  }
 }
 
-function convertEventFormat(event: any): ParsedCommand {
-  const startDate = new Date(event.date || event.start);
-  const endDate = event.end ? new Date(event.end) : addDays(startDate, 1);
-
-  return {
-    action: 'add',
-    dates: {
-      start: format(startDate, 'yyyy-MM-dd'),
-      end: format(endDate, 'yyyy-MM-dd')
-    },
-    eventDetails: {
-      title: event.title || event.summary || 'New Event',
-      startTime: event.time || format(startDate, 'HH:mm'),
-      endTime: format(addDays(startDate, event.duration ? parseInt(event.duration) : 1), 'HH:mm'),
-      type: 'social'
-    }
-  };
-}
-
-function convertDateFormat(parsed: any): ParsedCommand {
-  const startDate = new Date(parsed.date || parsed.start);
-  const endDate = parsed.end ? new Date(parsed.end) : addDays(startDate, 1);
-
-  return {
-    action: 'view',
-    dates: {
-      start: format(startDate, 'yyyy-MM-dd'),
-      end: format(endDate, 'yyyy-MM-dd')
-    }
-  };
-}
+// Rest of the file remains the same...

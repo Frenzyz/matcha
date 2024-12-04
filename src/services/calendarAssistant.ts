@@ -5,7 +5,6 @@ import { parseCommandResponse } from './llm/parser';
 import { llmService } from './llm';
 import { SYSTEM_PROMPT, createUserPrompt } from './llm/prompts';
 import { eventManager } from './eventManager';
-import { eventBus, CALENDAR_EVENTS } from './eventBus';
 import { formatDateTime } from '../utils/dateUtils';
 
 interface CommandResult {
@@ -88,19 +87,19 @@ export class CalendarAssistant {
         endDate.setHours(startDate.getHours() + 1, startDate.getMinutes(), 0, 0);
       }
 
-      const event: Partial<Event> = {
+      const event: Event = {
         id: crypto.randomUUID(),
         user_id: userId,
         title: command.eventDetails.title,
         description: command.eventDetails.description || '',
         start_time: startDate.toISOString(),
         end_time: endDate.toISOString(),
-        type: command.eventDetails.type || 'social',
+        type: command.eventDetails.type || 'academic',
         status: 'pending',
         source: 'manual'
       };
 
-      await eventManager.addEvent(event as Event, userId);
+      await eventManager.addEvent(event, userId);
 
       return {
         response: `Added "${event.title}" to your calendar for ${formatDateTime(startDate)} to ${formatDateTime(endDate)}`,

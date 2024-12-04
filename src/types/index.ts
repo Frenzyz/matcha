@@ -1,4 +1,8 @@
-export interface Event {
+import { Event as BaseEvent } from './event';
+
+export type EventType = 'academic' | 'career' | 'wellness' | 'social';
+
+export interface Event extends BaseEvent {
   id: string;
   user_id: string;
   title: string;
@@ -6,7 +10,7 @@ export interface Event {
   location?: string;
   start_time: string;
   end_time: string;
-  type: 'academic' | 'career' | 'wellness' | 'social' | 'research' | 'service' | 'cultural' | 'athletic' | 'administrative' | 'financial';
+  type: EventType;
   status: 'pending' | 'completed';
   attendees?: number;
   is_recurring?: boolean;
@@ -16,13 +20,4 @@ export interface Event {
   updated_at?: string;
   category_id?: string | null;
   color?: string;
-}
-
-export interface Category {
-  id: string;
-  user_id: string;
-  name: string;
-  color: string;
-  created_at: string;
-  updated_at: string;
 }

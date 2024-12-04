@@ -1,45 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Event } from '../../types';
 import TodoCategory from './TodoCategory';
 import { Plus, Calendar } from 'lucide-react';
 import { addDays, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 import { useAuth } from '../../context/AuthContext';
+import { useTodoEvents } from '../../hooks/useTodoEvents';
+import { eventManager } from '../../services/eventManager';
 
 interface TodoListProps {
-  events: Event[];
   categories: Array<{ id: string; name: string; color: string }>;
   isDarkMode: boolean;
   isAdvancedMode: boolean;
   onAddCategory: (name: string, color: string) => void;
   onEditCategory: (index: number, name: string, color: string) => void;
   onDeleteCategory: (index: number) => void;
-  onCompleteEvent: (eventId: string) => void;
-  onCreateEvent: (event: Event) => void;
-  onMoveEvent: (eventId: string, targetCategory: string) => void;
 }
 
-const DEFAULT_COLORS = [
-  '#10B981', // emerald
-  '#3B82F6', // blue
-  '#8B5CF6', // purple
-  '#EC4899', // pink
-  '#F59E0B', // amber
-  '#EF4444'  // red
-];
-
 export default function TodoList({
-  events,
   categories,
   isDarkMode,
   isAdvancedMode,
   onAddCategory,
   onEditCategory,
-  onDeleteCategory,
-  onCompleteEvent,
-  onCreateEvent,
-  onMoveEvent
+  onDeleteCategory
 }: TodoListProps) {
   const { user } = useAuth();
+  const { events, loading, error, updateEvents } = useTodoEvents();
   const [timeSpan, setTimeSpan] = useState(1);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newEvent, setNewEvent] = useState({
@@ -80,53 +66,77 @@ export default function TodoList({
     );
   };
 
-  const handleCreateEvent = () => {
+  const handleCreateEvent = async () => {
     if (!newEvent.title.trim() || !user) return;
 
-    onCreateEvent({
-      ...newEvent,
-      id: crypto.randomUUID(),
-      user_id: user.id,
-      status: 'pending',
-      type: 'academic',
-      source: 'manual'
-    } as Event);
+    try {
+      const event: Event = {
+        id: crypto.randomUUID(),
+        user_id: user.id,
+        title: newEvent.title,
+        description: newEvent.description,
+        location: newEvent.location,
+        start_time: newEvent.start_time,
+        end_time: newEvent.end_time,
+        type: 'academic',
+        status: 'pending',
+        source: 'manual'
+      };
 
-    setShowCreateForm(false);
-    setNewEvent({
-      title: '',
-      description: '',
-      location: '',
-      start_time: new Date().toISOString().slice(0, 16),
-      end_time: new Date().toISOString().slice(0, 16)
-    });
+      await eventManager.addEvent(event, user.id);
+      setShowCreateForm(false);
+      setNewEvent({
+        title: '',
+        description: '',
+        location: '',
+        start_time: new Date().toISOString().slice(0, 16),
+        end_time: new Date().toISOString().slice(0, 16)
+      });
+    } catch (err) {
+      console.error('Error creating event:', err);
+    }
   };
 
-  const handleAddNewCategory = () => {
+  const handleCompleteEvent = async (eventId: string) => {
     if (!user) return;
 
-    // Find the highest number in existing category names
-    const existingNumbers = categories
-      .map(cat => {
-        const match = cat.name.match(/Category (\d+)/);
-        return match ? parseInt(match[1]) : 0;
-      })
-      .filter(num => !isNaN(num));
+    try {
+      const event = events.find(e => e.id === eventId);
+      if (!event) return;
 
-    // Get the next available number
-    const nextNumber = existingNumbers.length > 0 
-      ? Math.max(...existingNumbers) + 1 
-      : categories.length + 1;
+      const updatedEvent = {
+        ...event,
+        status: event.status === 'completed' ? 'pending' : 'completed',
+        updated_at: new Date().toISOString()
+      };
 
-    const name = `Category ${nextNumber}`;
-    // Get a random color from DEFAULT_COLORS or fallback to emerald if all are used
-    const usedColors = new Set(categories.map(cat => cat.color));
-    const availableColors = DEFAULT_COLORS.filter(color => !usedColors.has(color));
-    const color = availableColors.length > 0 
-      ? availableColors[Math.floor(Math.random() * availableColors.length)]
-      : DEFAULT_COLORS[0];
+      await eventManager.updateEvent(updatedEvent);
+    } catch (err) {
+      console.error('Error updating event:', err);
+    }
+  };
 
-    onAddCategory(name, color);
+  const handleMoveEvent = async (eventId: string, targetCategory: string) => {
+    if (!user) return;
+
+    try {
+      const event = events.find(e => e.id === eventId);
+      if (!event) return;
+
+      const category = categories.find(c => c.name === targetCategory);
+      if (!category) return;
+
+      const updatedEvent = {
+        ...event,
+        category_id: category.id,
+        color: category.color,
+        updated_at: new Date().toISOString()
+      };
+
+      await eventManager.updateEvent(updatedEvent);
+    } catch (err) {
+      console.error('Error moving event:', err);
+    }
   };
 
   return (
@@ -231,15 +241,15 @@ export default function TodoList({
             index={index}
             onEditCategory={onEditCategory}
             onDeleteCategory={() => onDeleteCategory(index)}
-            onCompleteEvent={onCompleteEvent}
-            onMoveEvent={onMoveEvent}
+            onCompleteEvent={handleCompleteEvent}
+            onMoveEvent={handleMoveEvent}
           />
         ))}
       </div>
 
       {isAdvancedMode && (
         <button
-          onClick={handleAddNewCategory}
+          onClick={() => onAddCategory(`Category ${categories.length + 1}`, '#10B981')}
           className="w-full flex items-center justify-center gap-2 p-2 rounded-lg border border-dashed border-gray-300 dark:border-gray-600 hover:border-emerald-500 dark:hover:border-emerald-500 transition-colors"
         >
           <Plus size={16} />

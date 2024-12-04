@@ -24,6 +24,7 @@ class EventManager {
         .insert([{
           ...event,
           user_id: userId,
+          type: event.type || 'academic',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         }]);
@@ -76,6 +77,7 @@ class EventManager {
         .from('calendar_events')
         .update({
           ...event,
+          type: event.type || 'academic',
           updated_at: new Date().toISOString()
         })
         .eq('id', event.id)
