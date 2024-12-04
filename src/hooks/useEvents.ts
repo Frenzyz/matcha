@@ -1,8 +1,9 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Event } from '../types';
 import { EventService } from '../services/events';
 import { useAuth } from '../context/AuthContext';
 import { logger } from '../utils/logger';
+import { eventBus, CALENDAR_EVENTS } from '../services/eventBus';
 
 export function useEvents() {
   const [events, setEvents] = useState<Event[]>([]);
@@ -27,20 +28,53 @@ export function useEvents() {
     }
   }, [user]);
 
+  useEffect(() => {
+    if (user) {
+      fetchEvents();
+    }
+  }, [user, fetchEvents]);
+
+  useEffect(() => {
+    // Subscribe to calendar events
+    const unsubscribeUpdated = eventBus.on(CALENDAR_EVENTS.UPDATED, () => {
+      fetchEvents();
+    });
+    
+    const unsubscribeAdded = eventBus.on(CALENDAR_EVENTS.ADDED, () => {
+      fetchEvents();
+    });
+    
+    const unsubscribeDeleted = eventBus.on(CALENDAR_EVENTS.DELETED, () => {
+      fetchEvents();
+    });
+    
+    const unsubscribeModified = eventBus.on(CALENDAR_EVENTS.MODIFIED, () => {
+      fetchEvents();
+    });
+
+    return () => {
+      unsubscribeUpdated();
+      unsubscribeAdded();
+      unsubscribeDeleted();
+      unsubscribeModified();
+    };
+  }, [fetchEvents]);
+
   const addEvent = useCallback(async (event: Event) => {
     if (!user) return;
 
     try {
       setError(null);
       await EventService.addEvent(event, user.id);
-      await fetchEvents(); // Refresh events after adding
+      eventBus.emit(CALENDAR_EVENTS.ADDED, event);
+      eventBus.emit(CALENDAR_EVENTS.UPDATED);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to add event';
       setError(message);
       logger.error('Error adding event:', err);
       throw err;
     }
-  }, [user, fetchEvents]);
+  }, [user]);
 
   const updateEvent = useCallback(async (event: Event) => {
     if (!user) return;
@@ -48,21 +82,15 @@ export function useEvents() {
     try {
       setError(null);
       await EventService.updateEvent(event);
-      
-      // Optimistically update local state
-      setEvents(prev => prev.map(e => 
-        e.id === event.id ? event : e
-      ));
-      
-      // Refresh events to ensure consistency
-      await fetchEvents();
+      eventBus.emit(CALENDAR_EVENTS.MODIFIED);
+      eventBus.emit(CALENDAR_EVENTS.UPDATED);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to update event';
       setError(message);
       logger.error('Error updating event:', err);
       throw err;
     }
-  }, [user, fetchEvents]);
+  }, [user]);
 
   const deleteEvent = useCallback(async (eventId: string) => {
     if (!user) return;
@@ -70,19 +98,15 @@ export function useEvents() {
     try {
       setError(null);
       await EventService.deleteEvent(eventId, user.id);
-      
-      // Optimistically update local state
-      setEvents(prev => prev.filter(e => e.id !== eventId));
-      
-      // Refresh events to ensure consistency
-      await fetchEvents();
+      eventBus.emit(CALENDAR_EVENTS.DELETED, { id: eventId });
+      eventBus.emit(CALENDAR_EVENTS.UPDATED);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to delete event';
       setError(message);
       logger.error('Error deleting event:', err);
       throw err;
     }
-  }, [user, fetchEvents]);
+  }, [user]);
 
   return {
     events,

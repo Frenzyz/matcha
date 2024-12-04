@@ -3,8 +3,9 @@ import { format, isSameDay, addMonths, subMonths, isToday, startOfMonth } from '
 import { ChevronLeft, ChevronRight, List, Calendar as CalendarIcon, Trash2 } from 'lucide-react';
 import { Event } from '../types';
 import { useThemeStore } from '../store/themeStore';
-import { useEvents } from '../hooks/useEvents';
+import { useCalendarEvents } from '../hooks/useCalendarEvents';
 import DayTimeline from './DayTimeline';
+import { eventBus, CALENDAR_EVENTS } from '../services/eventBus';
 
 export default function Calendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -13,11 +14,7 @@ export default function Calendar() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [updatedDates, setUpdatedDates] = useState<Set<string>>(new Set());
   const { isDarkMode } = useThemeStore();
-  const { events, fetchEvents, deleteEvent } = useEvents();
-
-  useEffect(() => {
-    fetchEvents();
-  }, [fetchEvents]);
+  const { events, loading, error } = useCalendarEvents();
 
   // Calculate calendar days
   const calendarDays = useMemo(() => {
@@ -37,10 +34,9 @@ export default function Calendar() {
     };
   }, [currentDate]);
 
-  // Listen for calendar updates
+  // Track updated dates for animation
   useEffect(() => {
-    const handleCalendarUpdate = () => {
-      fetchEvents();
+    const handleEventUpdate = () => {
       const newDates = new Set<string>();
       events.forEach(event => {
         const date = new Date(event.start_time);
@@ -49,9 +45,11 @@ export default function Calendar() {
       setUpdatedDates(newDates);
     };
 
-    window.addEventListener('calendar-update', handleCalendarUpdate);
-    return () => window.removeEventListener('calendar-update', handleCalendarUpdate);
-  }, [events, fetchEvents]);
+    handleEventUpdate();
+
+    const unsubscribe = eventBus.on(CALENDAR_EVENTS.UPDATED, handleEventUpdate);
+    return () => unsubscribe();
+  }, [events]);
 
   // Clear animation after delay
   useEffect(() => {
@@ -72,25 +70,20 @@ export default function Calendar() {
     });
   }, [events, currentDate]);
 
-  const handleDeleteAll = async () => {
-    if (!window.confirm('Are you sure you want to delete all events?')) return;
-    
-    setIsDeleting(true);
-    try {
-      await Promise.all(events.map(event => deleteEvent(event.id)));
-      window.dispatchEvent(new CustomEvent('calendar-update'));
-      setSelectedDate(null);
-    } catch (error) {
-      console.error('Error deleting all events:', error);
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
   const handleDayClick = (day: number) => {
     const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
     setSelectedDate(newDate);
   };
+
+  if (loading) {
+    return <div className="flex items-center justify-center h-64">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
+    </div>;
+  }
+
+  if (error) {
+    return <div className="text-red-500 p-4">{error}</div>;
+  }
 
   return (
     <div className={`lg:col-span-3 ${isDarkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-sm p-6`}>
@@ -124,41 +117,27 @@ export default function Calendar() {
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          {events.length > 0 && (
-            <button
-              onClick={handleDeleteAll}
-              disabled={isDeleting}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors ${
-                isDeleting ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
-            >
-              <Trash2 size={16} />
-              <span className="text-sm font-medium">Delete All</span>
-            </button>
-          )}
-          <div className="flex gap-2">
-            <button
-              onClick={() => setCurrentDate(subMonths(currentDate, 1))}
-              className={`p-2 rounded-lg transition-colors ${
-                isDarkMode 
-                  ? 'hover:bg-gray-700 text-gray-300' 
-                  : 'hover:bg-gray-100 text-gray-600'
-              }`}
-            >
-              <ChevronLeft size={20} />
-            </button>
-            <button
-              onClick={() => setCurrentDate(addMonths(currentDate, 1))}
-              className={`p-2 rounded-lg transition-colors ${
-                isDarkMode 
-                  ? 'hover:bg-gray-700 text-gray-300' 
-                  : 'hover:bg-gray-100 text-gray-600'
-              }`}
-            >
-              <ChevronRight size={20} />
-            </button>
-          </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setCurrentDate(subMonths(currentDate, 1))}
+            className={`p-2 rounded-lg transition-colors ${
+              isDarkMode 
+                ? 'hover:bg-gray-700 text-gray-300' 
+                : 'hover:bg-gray-100 text-gray-600'
+            }`}
+          >
+            <ChevronLeft size={20} />
+          </button>
+          <button
+            onClick={() => setCurrentDate(addMonths(currentDate, 1))}
+            className={`p-2 rounded-lg transition-colors ${
+              isDarkMode 
+                ? 'hover:bg-gray-700 text-gray-300' 
+                : 'hover:bg-gray-100 text-gray-600'
+            }`}
+          >
+            <ChevronRight size={20} />
+          </button>
         </div>
       </div>
 

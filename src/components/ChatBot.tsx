@@ -10,6 +10,7 @@ import { MessageSquare, History, X, Calendar, RotateCcw } from 'lucide-react';
 import CalendarChat from './calendar-assistant/CalendarChat';
 import { logger } from '../utils/logger';
 import { Chat } from '../types/chat';
+import { Switch } from './ui/Switch';
 
 interface ChatBotProps {
   onClose?: () => void;
@@ -66,13 +67,13 @@ export default function ChatBot({ onClose }: ChatBotProps) {
 
   const handleLoadChat = async (chatId: string) => {
     try {
-      const { data, error } = await supabase
+      const { data, error: findError } = await supabase
         .from('chats')
         .select('*')
         .eq('id', chatId)
         .single();
 
-      if (error) throw error;
+      if (findError) throw findError;
 
       if (data) {
         if (mode === 'calendar') {
@@ -181,11 +182,12 @@ export default function ChatBot({ onClose }: ChatBotProps) {
   };
 
   const handleModeSwitch = () => {
-    setMode(mode === 'chat' ? 'calendar' : 'chat');
+    const newMode = mode === 'chat' ? 'calendar' : 'chat';
+    setMode(newMode);
     setMessages([{ 
-      text: mode === 'chat' 
-        ? "Hi! I'm your calendar assistant. I can help you manage your schedule!" 
-        : "Hi! How can I help you today?",
+      text: newMode === 'chat' 
+        ? "Hi! How can I help you today?"
+        : "Hi! I'm your calendar assistant. I can help you manage your schedule!",
       isBot: true 
     }]);
     setActiveChatId(null);
@@ -196,14 +198,16 @@ export default function ChatBot({ onClose }: ChatBotProps) {
   return (
     <div className="flex flex-col h-full">
       <div className="p-3 bg-theme-primary text-white flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleModeSwitch}
-            className="p-1 hover:bg-white/10 rounded transition-colors"
-            title={mode === 'chat' ? 'Switch to Calendar Assistant' : 'Switch to Chat'}
-          >
-            {mode === 'chat' ? <Calendar size={16} /> : <MessageSquare size={16} />}
-          </button>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <MessageSquare size={16} className={mode === 'chat' ? 'text-white' : 'text-white/60'} />
+            <Switch
+              checked={mode === 'calendar'}
+              onCheckedChange={() => handleModeSwitch()}
+              className="data-[state=checked]:bg-white/20"
+            />
+            <Calendar size={16} className={mode === 'calendar' ? 'text-white' : 'text-white/60'} />
+          </div>
           <span className="font-medium">
             {mode === 'chat' ? 'AI Assistant' : 'Calendar Assistant'}
           </span>
