@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { MessageSquare, X } from 'lucide-react';
 import Navbar from './Navbar';
 import Sidebar from './Sidebar';
@@ -13,17 +13,9 @@ interface LayoutProps {
 export default function Layout({ children }: LayoutProps) {
   const { isDarkMode } = useThemeStore();
   const location = useLocation();
-  const navigate = useNavigate();
   const isAuthPage = ['/login', '/signup', '/canvas-setup'].includes(location.pathname);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isChatOpen, setIsChatOpen] = useState(false);
-
-  // Redirect to dashboard if trying to access public routes while authenticated
-  React.useEffect(() => {
-    if (['/'].includes(location.pathname)) {
-      navigate('/dashboard');
-    }
-  }, [location.pathname, navigate]);
 
   if (isAuthPage) {
     return <>{children}</>;
@@ -34,8 +26,7 @@ export default function Layout({ children }: LayoutProps) {
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         <Navbar 
           toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} 
-          isSidebarOpen={isSidebarOpen}
-          onLogoClick={() => window.location.reload()} // Add this prop
+          isSidebarOpen={isSidebarOpen} 
         />
         
         <div className="flex">
@@ -64,18 +55,9 @@ export default function Layout({ children }: LayoutProps) {
 
         {/* Chat Window */}
         {isChatOpen && (
-          <div className="fixed bottom-20 right-4 w-80 h-96 bg-white dark:bg-gray-800 rounded-lg shadow-xl overflow-hidden z-50 flex flex-col">
-            <div className="p-3 bg-theme-primary text-white flex justify-between items-center">
-              <span className="font-medium">AI Assistant</span>
-              <button
-                onClick={() => setIsChatOpen(false)}
-                className="p-1 hover:bg-white/10 rounded"
-              >
-                <X size={16} />
-              </button>
-            </div>
+          <div className="fixed bottom-20 right-4 w-96 h-96 bg-white dark:bg-gray-800 rounded-lg shadow-xl overflow-hidden z-50 flex flex-col">
             <div className="flex-1 overflow-hidden">
-              <ChatBot />
+              <ChatBot onClose={() => setIsChatOpen(false)} />
             </div>
           </div>
         )}

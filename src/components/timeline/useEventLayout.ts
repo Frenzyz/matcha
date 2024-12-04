@@ -12,15 +12,17 @@ export function useEventLayout(events: Event[]): EventWithLayout[] {
       new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
     );
 
-    const layoutEvents: EventWithLayout[] = [];
     const columns: { end: number; events: EventWithLayout[] }[] = [];
+    const layoutEvents: EventWithLayout[] = [];
 
     sortedEvents.forEach(event => {
       const start = new Date(event.start_time).getTime();
       const end = new Date(event.end_time).getTime();
 
-      // Find overlapping events
+      // Find a column where this event can fit
       let column = columns.findIndex(col => col.end <= start);
+      
+      // If no column found, create a new one
       if (column === -1) {
         column = columns.length;
         columns.push({ end: 0, events: [] });

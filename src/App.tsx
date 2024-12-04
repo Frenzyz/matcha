@@ -7,8 +7,6 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
-import ChatBot from './components/ChatBot';
-import VirtualParent from './pages/VirtualParent';
 import TimeAnalysis from './components/TimeAnalysis';
 import Scholarships from './pages/Scholarships';
 import { UserDataProvider } from './context/UserDataProvider';
@@ -93,16 +91,6 @@ export default function App() {
             <Route path="/dashboard" element={
               <PrivateRoute>
                 <Dashboard />
-              </PrivateRoute>
-            } />
-            <Route path="/chat" element={
-              <PrivateRoute>
-                <ChatBot />
-              </PrivateRoute>
-            } />
-            <Route path="/virtual-parent" element={
-              <PrivateRoute>
-                <VirtualParent />
               </PrivateRoute>
             } />
             <Route path="/analysis" element={

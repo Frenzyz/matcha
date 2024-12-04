@@ -58,11 +58,14 @@ export class EventService {
     }
 
     try {
+      // Remove layout properties before updating
+      const { width, left, ...cleanEvent } = event as any;
+
       const { error } = await retryOperation(
         () => supabase
           .from('calendar_events')
           .update({
-            ...event,
+            ...cleanEvent,
             updated_at: new Date().toISOString()
           })
           .eq('id', event.id)
@@ -77,6 +80,9 @@ export class EventService {
 
       // Invalidate cache
       localStorage.removeItem(this.CACHE_KEY);
+
+      // Trigger calendar update
+      window.dispatchEvent(new CustomEvent('calendar-update'));
     } catch (error) {
       logger.error('Error updating event:', error);
       throw error;
@@ -107,6 +113,9 @@ export class EventService {
 
       // Invalidate cache
       localStorage.removeItem(this.CACHE_KEY);
+
+      // Trigger calendar update
+      window.dispatchEvent(new CustomEvent('calendar-update'));
     } catch (error) {
       logger.error('Error deleting event:', error);
       throw error;
@@ -140,6 +149,9 @@ export class EventService {
 
       // Invalidate cache
       localStorage.removeItem(this.CACHE_KEY);
+
+      // Trigger calendar update
+      window.dispatchEvent(new CustomEvent('calendar-update'));
     } catch (error) {
       logger.error('Error adding event:', error);
       throw error;

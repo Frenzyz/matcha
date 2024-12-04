@@ -1,34 +1,34 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { format } from 'date-fns';
 import { X } from 'lucide-react';
 import { Event } from '../types';
 import TimeGrid from './timeline/TimeGrid';
 import TimelineEvent from './timeline/TimelineEvent';
 import { useEventLayout } from './timeline/useEventLayout';
+import { useEvents } from '../hooks/useEvents';
+import { logger } from '../utils/logger';
 
 interface DayTimelineProps {
   date: Date;
   events: Event[];
   isDarkMode: boolean;
-  onEventsChange: (events: Event[]) => void;
-  onEventUpdate: (event: Event) => Promise<void>;
-  onEventDelete: (eventId: string) => Promise<void>;
   onClose: () => void;
 }
 
 export default function DayTimeline({ 
   date, 
-  events, 
+  events: initialEvents, 
   isDarkMode, 
-  onEventsChange,
-  onEventUpdate,
-  onEventDelete,
   onClose 
 }: DayTimelineProps) {
+  const { updateEvent, deleteEvent } = useEvents();
+  const [events, setEvents] = useState<Event[]>(initialEvents);
   const eventsWithLayout = useEventLayout(events);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const getEventPosition = (event: Event & { width: number; left: number }) => {
+  const getEventPosition = useCallback((event: Event & { width: number; left: number }) => {
     const start = new Date(event.start_time);
     const end = new Date(event.end_time);
     const startMinutes = start.getHours() * 60 + start.getMinutes();
@@ -42,42 +42,52 @@ export default function DayTimeline({
       width: `calc(${event.width * (100 - 5)}%)`,
       minHeight: '60px'
     };
-  };
+  }, []);
 
   const handleEventDelete = async (eventId: string) => {
     try {
-      await onEventDelete(eventId);
-      const updatedEvents = events.filter(e => e.id !== eventId);
-      onEventsChange(updatedEvents);
+      setIsDeleting(true);
+      setError(null);
+      await deleteEvent(eventId);
       
-      // If no more events for this day, close the timeline
-      if (updatedEvents.length === 0) {
+      // Update local state
+      setEvents(prev => prev.filter(e => e.id !== eventId));
+      
+      // Trigger calendar update
+      window.dispatchEvent(new CustomEvent('calendar-update'));
+      
+      // Close timeline if no more events
+      if (events.length <= 1) {
         onClose();
       }
     } catch (error) {
-      console.error('Error deleting event:', error);
+      const message = error instanceof Error ? error.message : 'Failed to delete event';
+      setError(message);
+      logger.error('Error deleting event:', error);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
   const handleEventUpdate = async (updatedEvent: Event) => {
     try {
-      await onEventUpdate(updatedEvent);
-      const updatedEvents = events.map(event => 
+      setError(null);
+      await updateEvent(updatedEvent);
+      
+      // Update local state
+      setEvents(prev => prev.map(event => 
         event.id === updatedEvent.id ? updatedEvent : event
-      );
-      onEventsChange(updatedEvents);
+      ));
+      
+      // Trigger calendar update
+      window.dispatchEvent(new CustomEvent('calendar-update'));
+      
       setEditingEvent(null);
     } catch (error) {
-      console.error('Error updating event:', error);
+      const message = error instanceof Error ? error.message : 'Failed to update event';
+      setError(message);
+      logger.error('Error updating event:', error);
     }
-  };
-
-  const handleClose = () => {
-    // Ensure any pending changes are saved before closing
-    if (editingEvent) {
-      handleEventUpdate(editingEvent);
-    }
-    onClose();
   };
 
   return (
@@ -94,7 +104,7 @@ export default function DayTimeline({
           </p>
         </div>
         <button
-          onClick={handleClose}
+          onClick={onClose}
           className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
         >
           <X size={20} />
@@ -119,6 +129,8 @@ export default function DayTimeline({
                 onDelete={handleEventDelete}
                 editingEvent={editingEvent}
                 setEditingEvent={setEditingEvent}
+                isDeleting={isDeleting}
+                error={error}
               />
             ))}
           </div>
