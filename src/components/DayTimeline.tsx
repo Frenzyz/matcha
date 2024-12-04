@@ -52,11 +52,8 @@ export default function DayTimeline({
       setIsDeleting(true);
       setError(null);
 
-      // Optimistically update UI
-      setEvents(prev => prev.filter(e => e.id !== eventId));
-
-      // Delete from backend
       await eventManager.deleteEvent(eventId, user.id);
+      setEvents(prev => prev.filter(e => e.id !== eventId));
 
       // Close timeline if no more events
       if (events.length <= 1) {
@@ -80,12 +77,9 @@ export default function DayTimeline({
     try {
       setError(null);
       await eventManager.updateEvent(updatedEvent);
-      
-      // Update local state
       setEvents(prev => prev.map(event => 
         event.id === updatedEvent.id ? updatedEvent : event
       ));
-      
       setEditingEvent(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to update event';

@@ -49,7 +49,7 @@ export function useEventLayout(events: Event[]): EventWithLayout[] {
         e.left = idx * width;
       });
 
-      // Add new event
+      // Add new event with layout properties
       const layoutEvent: EventWithLayout = {
         ...event,
         width,

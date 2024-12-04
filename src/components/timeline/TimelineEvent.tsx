@@ -52,6 +52,11 @@ export default function TimelineEvent({
     }
   };
 
+  const getCleanEvent = (event: Event & { width: number; left: number }): Event => {
+    const { width, left, ...cleanEvent } = event;
+    return cleanEvent;
+  };
+
   return (
     <div
       className={`absolute rounded-lg shadow-sm transition-all duration-300 ${
@@ -61,31 +66,44 @@ export default function TimelineEvent({
         ...position,
         backgroundColor: event.color || '#10B981'
       }}
-      onClick={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (!isEditing) {
+          onEdit(getCleanEvent(event));
+        }
+      }}
     >
       <div className={`p-2 h-full ${isEditing ? 'bg-white/95 dark:bg-gray-800/95 rounded-lg' : ''}`}>
         {isEditing ? (
           <div className="space-y-2">
             <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">Title</label>
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">
+                Title
+              </label>
               <input
                 type="text"
                 value={editingEvent?.title || ''}
                 onChange={(e) => setEditingEvent({ ...editingEvent!, title: e.target.value })}
                 className="w-full px-2 py-1 rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm"
+                onClick={(e) => e.stopPropagation()}
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">Location</label>
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">
+                Location
+              </label>
               <input
                 type="text"
                 value={editingEvent?.location || ''}
                 onChange={(e) => setEditingEvent({ ...editingEvent!, location: e.target.value })}
                 className="w-full px-2 py-1 rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm"
+                onClick={(e) => e.stopPropagation()}
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">Time</label>
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">
+                Time
+              </label>
               <div className="flex items-center gap-2">
                 <input
                   type="time"
@@ -100,6 +118,7 @@ export default function TimelineEvent({
                     });
                   }}
                   className="flex-1 px-2 py-1 rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm"
+                  onClick={(e) => e.stopPropagation()}
                 />
                 <span className="text-sm">to</span>
                 <input
@@ -115,18 +134,25 @@ export default function TimelineEvent({
                     });
                   }}
                   className="flex-1 px-2 py-1 rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm"
+                  onClick={(e) => e.stopPropagation()}
                 />
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-1">
               <button
-                onClick={onCancel}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCancel();
+                }}
                 className="p-1 hover:bg-black/10 rounded"
               >
                 <X size={14} />
               </button>
               <button
-                onClick={onSave}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSave();
+                }}
                 className="p-1 hover:bg-black/10 rounded"
               >
                 <Save size={14} />
@@ -134,7 +160,7 @@ export default function TimelineEvent({
             </div>
           </div>
         ) : (
-          <div className="h-full flex flex-col">
+          <div className="h-full flex flex-col text-white">
             <div className="flex justify-between items-start gap-1">
               <h4 className="font-medium text-sm" title={event.title}>
                 {event.title}
@@ -143,7 +169,7 @@ export default function TimelineEvent({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    onEdit(event);
+                    onEdit(getCleanEvent(event));
                   }}
                   className="p-0.5 hover:bg-black/10 rounded"
                 >
@@ -152,7 +178,7 @@ export default function TimelineEvent({
                 <button
                   onClick={handleDelete}
                   disabled={isDeleting}
-                  className={`p-0.5 hover:bg-black/10 rounded ${isDeleting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  className="p-0.5 hover:bg-black/10 rounded"
                 >
                   {isDeleting ? (
                     <Loader2 size={12} className="animate-spin" />

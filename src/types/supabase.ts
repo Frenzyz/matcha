@@ -1,6 +1,65 @@
 export interface Database {
   public: {
     Tables: {
+      calendar_events: {
+        Row: {
+          id: string;
+          user_id: string;
+          title: string;
+          description?: string;
+          location?: string;
+          start_time: string;
+          end_time: string;
+          type: string;
+          status: string;
+          attendees?: number;
+          is_recurring?: boolean;
+          recurrence_rule?: string;
+          source: string;
+          category_id?: string;
+          color?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          title: string;
+          description?: string;
+          location?: string;
+          start_time: string;
+          end_time: string;
+          type?: string;
+          status?: string;
+          attendees?: number;
+          is_recurring?: boolean;
+          recurrence_rule?: string;
+          source?: string;
+          category_id?: string;
+          color?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          title?: string;
+          description?: string;
+          location?: string;
+          start_time?: string;
+          end_time?: string;
+          type?: string;
+          status?: string;
+          attendees?: number;
+          is_recurring?: boolean;
+          recurrence_rule?: string;
+          source?: string;
+          category_id?: string;
+          color?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
       profiles: {
         Row: {
           id: string;
@@ -46,44 +105,6 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
           last_seen?: string;
-        };
-      };
-      assignments: {
-        Row: {
-          id: string;
-          user_id: string;
-          title: string;
-          description?: string;
-          course: string;
-          due_date: string;
-          progress: number;
-          status: 'pending' | 'in_progress' | 'completed' | 'late';
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          title: string;
-          description?: string;
-          course: string;
-          due_date: string;
-          progress?: number;
-          status?: 'pending' | 'in_progress' | 'completed' | 'late';
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          user_id?: string;
-          title?: string;
-          description?: string;
-          course?: string;
-          due_date?: string;
-          progress?: number;
-          status?: 'pending' | 'in_progress' | 'completed' | 'late';
-          created_at?: string;
-          updated_at?: string;
         };
       };
     };
