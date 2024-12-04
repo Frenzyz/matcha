@@ -5,6 +5,7 @@ import { useCalendarEvents } from '../hooks/useCalendarEvents';
 import DayTimeline from './DayTimeline';
 import CalendarHeader from './calendar/CalendarHeader';
 import CalendarGrid from './calendar/CalendarGrid';
+import { Trash2 } from 'lucide-react';
 
 export default function Calendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -12,7 +13,7 @@ export default function Calendar() {
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
   const [updatedDates, setUpdatedDates] = useState<Set<string>>(new Set());
   const { isDarkMode } = useThemeStore();
-  const { events, loading, error } = useCalendarEvents();
+  const { events, loading, error, deleteAllEvents } = useCalendarEvents();
 
   // Calculate calendar days
   const calendarDays = useMemo(() => {
@@ -34,17 +35,23 @@ export default function Calendar() {
 
   // Track updated dates for animation
   useEffect(() => {
-    const handleEventUpdate = () => {
-      const newDates = new Set<string>();
-      events.forEach(event => {
-        const date = new Date(event.start_time);
-        newDates.add(date.toISOString().split('T')[0]);
-      });
-      setUpdatedDates(newDates);
+    const handleEventUpdate = (updatedEvent?: any) => {
+      if (updatedEvent) {
+        const date = new Date(updatedEvent.start_time);
+        setUpdatedDates(new Set([date.toISOString().split('T')[0]]));
+      }
     };
 
-    handleEventUpdate();
-  }, [events]);
+    const cleanup = () => {
+      setUpdatedDates(new Set());
+    };
+
+    window.addEventListener('calendar-update', handleEventUpdate);
+    return () => {
+      window.removeEventListener('calendar-update', handleEventUpdate);
+      cleanup();
+    };
+  }, []);
 
   // Clear animation after delay
   useEffect(() => {
@@ -70,6 +77,12 @@ export default function Calendar() {
     setSelectedDate(newDate);
   };
 
+  const handleClearEvents = async () => {
+    if (window.confirm('Are you sure you want to clear all events?')) {
+      await deleteAllEvents();
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -84,14 +97,26 @@ export default function Calendar() {
 
   return (
     <div className={`${isDarkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-sm p-6`}>
-      <CalendarHeader
-        currentDate={currentDate}
-        viewMode={viewMode}
-        isDarkMode={isDarkMode}
-        onViewModeChange={setViewMode}
-        onPreviousMonth={() => setCurrentDate(subMonths(currentDate, 1))}
-        onNextMonth={() => setCurrentDate(addMonths(currentDate, 1))}
-      />
+      <div className="flex justify-between items-center mb-6">
+        <CalendarHeader
+          currentDate={currentDate}
+          viewMode={viewMode}
+          isDarkMode={isDarkMode}
+          onViewModeChange={setViewMode}
+          onPreviousMonth={() => setCurrentDate(subMonths(currentDate, 1))}
+          onNextMonth={() => setCurrentDate(addMonths(currentDate, 1))}
+        />
+        
+        {events.length > 0 && (
+          <button
+            onClick={handleClearEvents}
+            className="flex items-center gap-2 px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+          >
+            <Trash2 size={16} />
+            <span>Clear All</span>
+          </button>
+        )}
+      </div>
 
       <div className="mt-6">
         {viewMode === 'calendar' ? (

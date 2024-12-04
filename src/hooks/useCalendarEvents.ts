@@ -32,6 +32,20 @@ export function useCalendarEvents() {
     }
   }, [user]);
 
+  const deleteAllEvents = useCallback(async () => {
+    if (!user) return;
+
+    try {
+      await eventManager.deleteAllEvents(user.id);
+      setEvents([]);
+      eventBus.emit(CALENDAR_EVENTS.UPDATED);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete events';
+      setError(message);
+      logger.error('Error deleting all events:', err);
+    }
+  }, [user]);
+
   useEffect(() => {
     if (user) {
       fetchEvents();
@@ -61,6 +75,7 @@ export function useCalendarEvents() {
     events,
     loading,
     error,
-    fetchEvents
+    fetchEvents,
+    deleteAllEvents
   };
 }

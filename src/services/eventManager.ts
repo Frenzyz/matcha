@@ -71,6 +71,29 @@ class EventManager {
     }
   }
 
+  async deleteAllEvents(userId: string): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('calendar_events')
+        .delete()
+        .eq('user_id', userId);
+
+      if (error) throw error;
+
+      // Update local cache
+      this.events = [];
+
+      // Emit events
+      eventBus.emit(CALENDAR_EVENTS.UPDATED);
+
+      // Notify all subscribers
+      this.notifySubscribers();
+    } catch (error) {
+      logger.error('Error in EventManager.deleteAllEvents:', error);
+      throw error;
+    }
+  }
+
   async updateEvent(event: Event): Promise<void> {
     try {
       const { error } = await supabase
@@ -90,7 +113,7 @@ class EventManager {
 
       // Emit events in sequence
       eventBus.emit(CALENDAR_EVENTS.MODIFIED, event);
-      eventBus.emit(CALENDAR_EVENTS.UPDATED);
+      eventBus.emit(CALENDAR_EVENTS.UPDATED, event);
 
       // Notify all subscribers
       this.notifySubscribers();
