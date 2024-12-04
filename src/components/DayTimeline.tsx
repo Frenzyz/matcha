@@ -5,7 +5,8 @@ import { Event } from '../types';
 import TimeGrid from './timeline/TimeGrid';
 import TimelineEvent from './timeline/TimelineEvent';
 import { useEventLayout } from './timeline/useEventLayout';
-import { useEvents } from '../hooks/useEvents';
+import { eventManager } from '../services/eventManager';
+import { useAuth } from '../context/AuthContext';
 import { logger } from '../utils/logger';
 
 interface DayTimelineProps {
@@ -21,7 +22,7 @@ export default function DayTimeline({
   isDarkMode, 
   onClose 
 }: DayTimelineProps) {
-  const { updateEvent, deleteEvent } = useEvents();
+  const { user } = useAuth();
   const [events, setEvents] = useState<Event[]>(initialEvents);
   const eventsWithLayout = useEventLayout(events);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
@@ -45,42 +46,45 @@ export default function DayTimeline({
   }, []);
 
   const handleEventDelete = async (eventId: string) => {
+    if (!user) return;
+
     try {
       setIsDeleting(true);
       setError(null);
-      await deleteEvent(eventId);
-      
-      // Update local state
+
+      // Optimistically update UI
       setEvents(prev => prev.filter(e => e.id !== eventId));
-      
-      // Trigger calendar update
-      window.dispatchEvent(new CustomEvent('calendar-update'));
-      
+
+      // Delete from backend
+      await eventManager.deleteEvent(eventId, user.id);
+
       // Close timeline if no more events
       if (events.length <= 1) {
-        onClose();
+        setTimeout(onClose, 300); // Wait for animation
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to delete event';
       setError(message);
       logger.error('Error deleting event:', error);
+      
+      // Revert optimistic update on error
+      setEvents(initialEvents);
     } finally {
       setIsDeleting(false);
     }
   };
 
   const handleEventUpdate = async (updatedEvent: Event) => {
+    if (!user) return;
+
     try {
       setError(null);
-      await updateEvent(updatedEvent);
+      await eventManager.updateEvent(updatedEvent);
       
       // Update local state
       setEvents(prev => prev.map(event => 
         event.id === updatedEvent.id ? updatedEvent : event
       ));
-      
-      // Trigger calendar update
-      window.dispatchEvent(new CustomEvent('calendar-update'));
       
       setEditingEvent(null);
     } catch (error) {

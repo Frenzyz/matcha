@@ -1,17 +1,15 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { format, isSameDay, addMonths, subMonths, isToday, startOfMonth } from 'date-fns';
-import { ChevronLeft, ChevronRight, List, Calendar as CalendarIcon, Trash2 } from 'lucide-react';
-import { Event } from '../types';
+import { format, isSameDay, addMonths, subMonths, startOfMonth } from 'date-fns';
 import { useThemeStore } from '../store/themeStore';
 import { useCalendarEvents } from '../hooks/useCalendarEvents';
 import DayTimeline from './DayTimeline';
-import { eventBus, CALENDAR_EVENTS } from '../services/eventBus';
+import CalendarHeader from './calendar/CalendarHeader';
+import CalendarGrid from './calendar/CalendarGrid';
 
 export default function Calendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
-  const [isDeleting, setIsDeleting] = useState(false);
   const [updatedDates, setUpdatedDates] = useState<Set<string>>(new Set());
   const { isDarkMode } = useThemeStore();
   const { events, loading, error } = useCalendarEvents();
@@ -46,9 +44,6 @@ export default function Calendar() {
     };
 
     handleEventUpdate();
-
-    const unsubscribe = eventBus.on(CALENDAR_EVENTS.UPDATED, handleEventUpdate);
-    return () => unsubscribe();
   }, [events]);
 
   // Clear animation after delay
@@ -76,9 +71,11 @@ export default function Calendar() {
   };
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
-    </div>;
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
+      </div>
+    );
   }
 
   if (error) {
@@ -86,174 +83,55 @@ export default function Calendar() {
   }
 
   return (
-    <div className={`lg:col-span-3 ${isDarkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-sm p-6`}>
-      {/* Calendar header */}
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-4">
-          <h2 className="text-lg font-semibold">
-            {format(currentDate, 'MMMM yyyy')}
-          </h2>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setViewMode('calendar')}
-              className={`px-3 py-1.5 rounded-lg transition-colors ${
-                viewMode === 'calendar' 
-                  ? 'bg-emerald-500 text-white' 
-                  : isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
-              }`}
-            >
-              <CalendarIcon size={20} />
-            </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`px-3 py-1.5 rounded-lg transition-colors ${
-                viewMode === 'list' 
-                  ? 'bg-emerald-500 text-white' 
-                  : isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
-              }`}
-            >
-              <List size={20} />
-            </button>
-          </div>
-        </div>
+    <div className={`${isDarkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-sm p-6`}>
+      <CalendarHeader
+        currentDate={currentDate}
+        viewMode={viewMode}
+        isDarkMode={isDarkMode}
+        onViewModeChange={setViewMode}
+        onPreviousMonth={() => setCurrentDate(subMonths(currentDate, 1))}
+        onNextMonth={() => setCurrentDate(addMonths(currentDate, 1))}
+      />
 
-        <div className="flex gap-2">
-          <button
-            onClick={() => setCurrentDate(subMonths(currentDate, 1))}
-            className={`p-2 rounded-lg transition-colors ${
-              isDarkMode 
-                ? 'hover:bg-gray-700 text-gray-300' 
-                : 'hover:bg-gray-100 text-gray-600'
-            }`}
-          >
-            <ChevronLeft size={20} />
-          </button>
-          <button
-            onClick={() => setCurrentDate(addMonths(currentDate, 1))}
-            className={`p-2 rounded-lg transition-colors ${
-              isDarkMode 
-                ? 'hover:bg-gray-700 text-gray-300' 
-                : 'hover:bg-gray-100 text-gray-600'
-            }`}
-          >
-            <ChevronRight size={20} />
-          </button>
-        </div>
-      </div>
-
-      {/* Calendar grid */}
-      {viewMode === 'calendar' ? (
-        <div className="grid grid-cols-7 gap-1">
-          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-            <div
-              key={day}
-              className={`text-center text-sm font-medium py-2 ${
-                isDarkMode ? 'text-gray-400' : 'text-gray-600'
-              }`}
-            >
-              {day}
-            </div>
-          ))}
-
-          {calendarDays.previousMonthDays.map(day => (
-            <div
-              key={`prev-${day}`}
-              className={`h-32 p-1 rounded-lg ${
-                isDarkMode 
-                  ? 'bg-gray-900/50' 
-                  : 'bg-gray-50'
-              }`}
-            />
-          ))}
-
-          {calendarDays.days.map(day => {
-            const dayEvents = getEventsForDay(day);
-            const extraEvents = dayEvents.length > 2 ? dayEvents.length - 2 : 0;
-            const isCurrentDay = isToday(new Date(currentDate.getFullYear(), currentDate.getMonth(), day));
-            const dateStr = new Date(currentDate.getFullYear(), currentDate.getMonth(), day).toISOString().split('T')[0];
-            const isUpdated = updatedDates.has(dateStr);
-
-            return (
-              <div
-                key={day}
-                onClick={() => handleDayClick(day)}
-                className={`h-32 p-1 rounded-lg cursor-pointer transition-all duration-300 ${
-                  isDarkMode
-                    ? isCurrentDay 
-                      ? 'bg-emerald-900/20 hover:bg-emerald-900/30' 
-                      : 'hover:bg-gray-700/50'
-                    : isCurrentDay
-                      ? 'bg-emerald-50 hover:bg-emerald-100'
-                      : 'hover:bg-gray-50'
-                } ${
-                  isUpdated ? 'animate-calendar-glow' : ''
-                }`}
-              >
-                <div className={`text-sm ${
-                  isCurrentDay 
-                    ? 'font-bold text-emerald-500' 
-                    : isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                }`}>
-                  {day}
-                </div>
-                <div className="mt-1 space-y-1">
-                  {dayEvents.slice(0, 2).map((event) => (
-                    <div
-                      key={event.id}
-                      className={`text-xs truncate px-1.5 py-0.5 rounded-md ${
-                        event.status === 'completed'
-                          ? 'line-through opacity-50'
-                          : ''
-                      }`}
-                      style={{ 
-                        backgroundColor: event.color || '#10B981',
-                        color: isDarkMode ? 'white' : 'inherit'
-                      }}
-                    >
-                      {event.title}
-                    </div>
-                  ))}
-                  {extraEvents > 0 && (
-                    <div className="relative flex justify-end">
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
-                        isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-700'
-                      }`}>
-                        +{extraEvents}
-                      </div>
-                    </div>
+      <div className="mt-6">
+        {viewMode === 'calendar' ? (
+          <CalendarGrid
+            days={calendarDays.days}
+            previousMonthDays={calendarDays.previousMonthDays}
+            currentDate={currentDate}
+            isDarkMode={isDarkMode}
+            events={events}
+            getEventsForDay={getEventsForDay}
+            onDayClick={handleDayClick}
+            updatedDates={updatedDates}
+          />
+        ) : (
+          <div className="space-y-3">
+            {events
+              .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+              .map(event => (
+                <div
+                  key={event.id}
+                  className={`p-4 rounded-lg transition-colors`}
+                  style={{ backgroundColor: event.color || '#10B981' }}
+                >
+                  <h3 className={`font-semibold ${event.status === 'completed' ? 'line-through' : ''}`}>
+                    {event.title}
+                  </h3>
+                  <p className={`text-sm ${event.status === 'completed' ? 'line-through opacity-50' : ''}`}>
+                    {format(new Date(event.start_time), 'PPp')}
+                  </p>
+                  {event.location && (
+                    <p className={`text-sm ${event.status === 'completed' ? 'line-through opacity-50' : ''}`}>
+                      {event.location}
+                    </p>
                   )}
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {events
-            .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
-            .map(event => (
-              <div
-                key={event.id}
-                className={`p-4 rounded-lg transition-colors`}
-                style={{ backgroundColor: event.color || '#10B981' }}
-              >
-                <h3 className={`font-semibold ${event.status === 'completed' ? 'line-through' : ''}`}>
-                  {event.title}
-                </h3>
-                <p className={`text-sm ${event.status === 'completed' ? 'line-through opacity-50' : ''}`}>
-                  {format(new Date(event.start_time), 'PPp')}
-                </p>
-                {event.location && (
-                  <p className={`text-sm ${event.status === 'completed' ? 'line-through opacity-50' : ''}`}>
-                    {event.location}
-                  </p>
-                )}
-              </div>
-            ))}
-        </div>
-      )}
+              ))}
+          </div>
+        )}
+      </div>
 
-      {/* Day timeline modal */}
       {selectedDate && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50">
           <div className="relative w-full max-w-4xl h-[90vh] flex flex-col rounded-xl shadow-xl bg-white dark:bg-gray-800 mx-auto my-8">

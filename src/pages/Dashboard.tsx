@@ -186,7 +186,7 @@ export default function Dashboard({ defaultView = 'todo' }: DashboardProps) {
 
   return (
     <div className="p-6">
-      <div className={`space-y-6 ${isAdvancedMode ? 'block' : 'grid grid-cols-1 lg:grid-cols-12 gap-6'}`}>
+      <div className={`${isAdvancedMode ? 'block' : 'grid grid-cols-1 lg:grid-cols-12 gap-6'}`}>
         <div className={isAdvancedMode ? 'w-full' : 'lg:col-span-5 xl:col-span-4'}>
           <div className={`rounded-xl shadow-sm p-6 ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
             <div className="flex justify-between items-center mb-4">

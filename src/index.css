@@ -70,6 +70,22 @@ body {
   animation: calendar-glow 2s ease-in-out;
 }
 
+/* Timeline animations */
+@keyframes slide-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+}
+
+.timeline-event-exit {
+  animation: slide-out 0.3s ease-out forwards;
+}
+
 /* Chat animations */
 @keyframes slide-up {
   from {

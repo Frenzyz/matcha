@@ -11,6 +11,10 @@ export function useCalendarEvents() {
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
 
+  const updateEvents = useCallback(() => {
+    setEvents(eventManager.getEvents());
+  }, []);
+
   const fetchEvents = useCallback(async () => {
     if (!user) return;
 
@@ -36,13 +40,13 @@ export function useCalendarEvents() {
 
   useEffect(() => {
     // Subscribe to event manager updates
-    const unsubscribe = eventManager.subscribe(fetchEvents);
+    const unsubscribe = eventManager.subscribe(updateEvents);
 
     // Subscribe to event bus events
-    const unsubscribeUpdated = eventBus.on(CALENDAR_EVENTS.UPDATED, fetchEvents);
-    const unsubscribeAdded = eventBus.on(CALENDAR_EVENTS.ADDED, fetchEvents);
-    const unsubscribeDeleted = eventBus.on(CALENDAR_EVENTS.DELETED, fetchEvents);
-    const unsubscribeModified = eventBus.on(CALENDAR_EVENTS.MODIFIED, fetchEvents);
+    const unsubscribeUpdated = eventBus.on(CALENDAR_EVENTS.UPDATED, updateEvents);
+    const unsubscribeAdded = eventBus.on(CALENDAR_EVENTS.ADDED, updateEvents);
+    const unsubscribeDeleted = eventBus.on(CALENDAR_EVENTS.DELETED, updateEvents);
+    const unsubscribeModified = eventBus.on(CALENDAR_EVENTS.MODIFIED, updateEvents);
 
     return () => {
       unsubscribe();
@@ -51,7 +55,7 @@ export function useCalendarEvents() {
       unsubscribeDeleted();
       unsubscribeModified();
     };
-  }, [fetchEvents]);
+  }, [updateEvents]);
 
   return {
     events,

@@ -20,6 +20,8 @@ interface TimelineEventProps {
   onDelete: (id: string) => Promise<void>;
   editingEvent: Event | null;
   setEditingEvent: (event: Event | null) => void;
+  isDeleting: boolean;
+  error: string | null;
 }
 
 export default function TimelineEvent({
@@ -32,64 +34,36 @@ export default function TimelineEvent({
   onCancel,
   onDelete,
   editingEvent,
-  setEditingEvent
+  setEditingEvent,
+  isDeleting,
+  error
 }: TimelineEventProps) {
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const getEventColor = (event: Event) => {
-    const baseColor = event.color || '#10B981';
-    
-    if (event.status === 'completed') {
-      const r = parseInt(baseColor.slice(1, 3), 16);
-      const g = parseInt(baseColor.slice(3, 5), 16);
-      const b = parseInt(baseColor.slice(5, 7), 16);
-      return `rgba(${r}, ${g}, ${b}, 0.5)`;
-    }
-    
-    return baseColor;
-  };
+  const [isRemoving, setIsRemoving] = useState(false);
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (isDeleting) return;
 
     try {
-      setIsDeleting(true);
-      setError(null);
+      setIsRemoving(true);
       await onDelete(event.id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete event');
-      console.error('Error deleting event:', err);
-    } finally {
-      setIsDeleting(false);
+      setIsRemoving(false);
     }
-  };
-
-  const handleEdit = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setError(null);
-    onEdit(event);
   };
 
   return (
     <div
-      className={`absolute rounded-lg shadow-sm transition-all ${
+      className={`absolute rounded-lg shadow-sm transition-all duration-300 ${
         isEditing ? 'ring-2 ring-emerald-500 ring-offset-2 dark:ring-offset-gray-800 z-20' : ''
-      }`}
+      } ${isRemoving ? 'opacity-0 scale-95 pointer-events-none' : ''}`}
       style={{
         ...position,
-        backgroundColor: getEventColor(event)
+        backgroundColor: event.color || '#10B981'
       }}
       onClick={(e) => e.stopPropagation()}
     >
       <div className={`p-2 h-full ${isEditing ? 'bg-white/95 dark:bg-gray-800/95 rounded-lg' : ''}`}>
-        {error && (
-          <div className="mb-2 p-1 text-xs bg-red-100 text-red-600 rounded">
-            {error}
-          </div>
-        )}
-        
         {isEditing ? (
           <div className="space-y-2">
             <div>
@@ -99,7 +73,6 @@ export default function TimelineEvent({
                 value={editingEvent?.title || ''}
                 onChange={(e) => setEditingEvent({ ...editingEvent!, title: e.target.value })}
                 className="w-full px-2 py-1 rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm"
-                onClick={(e) => e.stopPropagation()}
               />
             </div>
             <div>
@@ -109,7 +82,6 @@ export default function TimelineEvent({
                 value={editingEvent?.location || ''}
                 onChange={(e) => setEditingEvent({ ...editingEvent!, location: e.target.value })}
                 className="w-full px-2 py-1 rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm"
-                onClick={(e) => e.stopPropagation()}
               />
             </div>
             <div>
@@ -117,10 +89,10 @@ export default function TimelineEvent({
               <div className="flex items-center gap-2">
                 <input
                   type="time"
-                  value={format(parseISO(editingEvent?.start_time || event.start_time), 'HH:mm')}
+                  value={format(parseISO(editingEvent?.start_time || ''), 'HH:mm')}
                   onChange={(e) => {
                     const [hours, minutes] = e.target.value.split(':');
-                    const newDate = new Date(editingEvent?.start_time || event.start_time);
+                    const newDate = new Date(editingEvent?.start_time || '');
                     newDate.setHours(parseInt(hours), parseInt(minutes));
                     setEditingEvent({
                       ...editingEvent!,
@@ -128,15 +100,14 @@ export default function TimelineEvent({
                     });
                   }}
                   className="flex-1 px-2 py-1 rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm"
-                  onClick={(e) => e.stopPropagation()}
                 />
                 <span className="text-sm">to</span>
                 <input
                   type="time"
-                  value={format(parseISO(editingEvent?.end_time || event.end_time), 'HH:mm')}
+                  value={format(parseISO(editingEvent?.end_time || ''), 'HH:mm')}
                   onChange={(e) => {
                     const [hours, minutes] = e.target.value.split(':');
-                    const newDate = new Date(editingEvent?.end_time || event.end_time);
+                    const newDate = new Date(editingEvent?.end_time || '');
                     newDate.setHours(parseInt(hours), parseInt(minutes));
                     setEditingEvent({
                       ...editingEvent!,
@@ -144,7 +115,6 @@ export default function TimelineEvent({
                     });
                   }}
                   className="flex-1 px-2 py-1 rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm"
-                  onClick={(e) => e.stopPropagation()}
                 />
               </div>
             </div>
@@ -171,7 +141,10 @@ export default function TimelineEvent({
               </h4>
               <div className="flex gap-0.5 flex-shrink-0">
                 <button
-                  onClick={handleEdit}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit(event);
+                  }}
                   className="p-0.5 hover:bg-black/10 rounded"
                 >
                   <Pen size={12} />
