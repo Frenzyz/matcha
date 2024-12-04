@@ -5,22 +5,22 @@ import { Leaf, ArrowRight, Calendar, Clock, Zap } from 'lucide-react';
 export default function Upcoming() {
   const upcomingFeatures = [
     {
+      title: "Smart Calendar Assistant",
+      description: "AI-powered calendar management and event suggestions",
+      releaseDate: "Out Now! (BETA)",
+      progress: 100
+    },
+    {
       title: "Group Planning Spaces",
       description: "Plan out events with classmates in virtual planning rooms",
       releaseDate: "Coming June 2024",
-      progress: 20
-    },
-    {
-      title: "Smart Calendar Assistant",
-      description: "AI-powered calendar management and event suggestions",
-      releaseDate: "Coming May 2024",
-      progress: 30
+      progress: 40
     },
     {
       title: "Smart Budgeting",
       description: "The smart and simple budgeting tool for all students",
       releaseDate: "Coming April 2024",
-      progress: 40
+      progress: 20
     }
   ];
 
