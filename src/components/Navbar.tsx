@@ -4,6 +4,7 @@ import { Leaf, Bell, Menu, X, Settings, LogOut, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useUser } from '../hooks/useUser';
 import { supabase } from '../config/supabase';
+import CurrentTime from './CurrentTime';
 
 interface Notification {
   id: string;
@@ -105,6 +106,8 @@ export default function Navbar({ toggleSidebar, isSidebarOpen, onLogoClick }: Na
           </div>
 
           <div className="flex items-center gap-6">
+            <CurrentTime />
+            
             <div className="relative" ref={notifRef}>
               <button 
                 onClick={() => setNotificationsOpen(!notificationsOpen)}

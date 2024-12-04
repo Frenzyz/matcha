@@ -1,14 +1,10 @@
-import { parse, format, isValid, parseISO, startOfDay, endOfDay, addHours } from 'date-fns';
-import { zonedTimeToUtc, utcToZonedTime } from 'date-fns-tz';
+import { parse, format, isValid, parseISO, startOfDay, endOfDay, addDays } from 'date-fns';
 import { logger } from './logger';
 
 export function parseDate(dateString: string): Date {
   try {
     logger.info('Parsing date:', { dateString });
     
-    // Get user's timezone
-    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
     // Handle time-only strings by combining with today's date
     if (/^\d{1,2}:\d{2}(:\d{2})?(\s*(am|pm))?$/i.test(dateString)) {
       const today = new Date();
@@ -22,7 +18,7 @@ export function parseDate(dateString: string): Date {
       if (timeStr.includes('am') && hour === 12) hour = 0;
 
       today.setHours(hour, minute, 0, 0);
-      return zonedTimeToUtc(today, timeZone);
+      return today;
     }
 
     // Try parsing as ISO string
@@ -51,7 +47,7 @@ export function parseDate(dateString: string): Date {
       try {
         const parsedDate = parse(dateString, formatStr, new Date());
         if (isValid(parsedDate)) {
-          return zonedTimeToUtc(parsedDate, timeZone);
+          return parsedDate;
         }
       } catch {
         continue;
@@ -61,7 +57,7 @@ export function parseDate(dateString: string): Date {
     // Try parsing as natural language
     const naturalDate = new Date(dateString);
     if (isValid(naturalDate)) {
-      return zonedTimeToUtc(naturalDate, timeZone);
+      return naturalDate;
     }
 
     throw new Error(`Unable to parse date: ${dateString}`);
@@ -73,9 +69,8 @@ export function parseDate(dateString: string): Date {
 
 export function formatDateRange(startTime: string, endTime: string): string {
   try {
-    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const start = utcToZonedTime(new Date(startTime), timeZone);
-    const end = utcToZonedTime(new Date(endTime), timeZone);
+    const start = new Date(startTime);
+    const end = new Date(endTime);
 
     if (start.toDateString() === end.toDateString()) {
       return `${format(start, 'MMMM d, yyyy')} from ${format(start, 'h:mm a')} to ${format(end, 'h:mm a')}`;
@@ -90,9 +85,7 @@ export function formatDateRange(startTime: string, endTime: string): string {
 
 export function formatDateTime(date: Date): string {
   try {
-    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const zonedDate = utcToZonedTime(date, timeZone);
-    return format(zonedDate, 'MMMM d, yyyy h:mm a');
+    return format(date, 'MMMM d, yyyy h:mm a');
   } catch (error) {
     logger.error('Error formatting date time:', { error, date });
     throw error;
@@ -100,10 +93,20 @@ export function formatDateTime(date: Date): string {
 }
 
 export function getDayRange(date: Date): { start: Date; end: Date } {
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const zonedDate = utcToZonedTime(date, timeZone);
   return {
-    start: zonedTimeToUtc(startOfDay(zonedDate), timeZone),
-    end: zonedTimeToUtc(endOfDay(zonedDate), timeZone)
+    start: startOfDay(date),
+    end: endOfDay(date)
+  };
+}
+
+export function getCurrentDateTime(): { date: string; time: string } {
+  const now = new Date();
+  return {
+    date: now.toLocaleDateString('en-CA'), // YYYY-MM-DD format
+    time: now.toLocaleTimeString('en-US', { 
+      hour12: false,
+      hour: '2-digit',
+      minute: '2-digit'
+    })
   };
 }

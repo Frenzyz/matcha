@@ -8,8 +8,8 @@ For viewing events (including "show schedule", "what's on my calendar", etc):
   "action": "view",
   "timeRange": "today" | "tomorrow" | "week",
   "dates": {
-    "start": "${new Date().toISOString().split('T')[0]}",
-    "end": "${new Date().toISOString().split('T')[0]}"
+    "start": "YYYY-MM-DD",
+    "end": "YYYY-MM-DD"
   }
 }
 
@@ -60,12 +60,19 @@ IMPORTANT:
 - Use 24-hour format for times (HH:mm)
 - Use ISO format for dates (YYYY-MM-DD)
 - For events without an end time, add 1 hour to start time
-- For relative dates (tomorrow, next week), calculate the actual date
+- For relative dates (today, tomorrow, next week), use the provided current date
 - Include all required fields based on the action type`;
 
 export function createUserPrompt(command: string, currentDate: string): string {
-  return `Current date: ${currentDate}
+  const now = new Date();
+  const timeString = now.toLocaleTimeString('en-US', { 
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+
+  return `Current date and time: ${currentDate} ${timeString}
 User request: ${command}
 
-Return a JSON object representing this calendar request.`;
+Return a JSON object representing this calendar request. Use the provided current date for any relative date references like "today" or "tomorrow".`;
 }
