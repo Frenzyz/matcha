@@ -3,7 +3,7 @@ import { Event } from '../types';
 import { logger } from '../utils/logger';
 import { formatDateTime } from '../utils/dateUtils';
 import { eventBus, CALENDAR_EVENTS } from './eventBus';
-import { addDays, startOfDay, endOfDay } from 'date-fns';
+import { addDays, startOfDay, endOfDay, parseISO } from 'date-fns';
 
 interface GoogleCalendarEvent {
   id: string;
@@ -18,6 +18,13 @@ interface GoogleCalendarEvent {
     dateTime: string;
     timeZone?: string;
   };
+}
+
+interface CalendarPreference {
+  id: string;
+  calendar_id: string;
+  calendar_name: string;
+  is_selected: boolean;
 }
 
 export class CalendarService {
@@ -47,7 +54,8 @@ export class CalendarService {
     selectedCalendars: string[];
   }): Promise<void> {
     try {
-      const { error } = await supabase
+      // First update the Google Calendar token
+      const { error: tokenError } = await supabase
         .from('profiles')
         .update({
           google_calendar_token: preferences.token,
@@ -56,7 +64,24 @@ export class CalendarService {
         })
         .eq('id', userId);
 
-      if (error) throw error;
+      if (tokenError) throw tokenError;
+
+      // Then update calendar preferences
+      const { error: prefsError } = await supabase
+        .from('calendar_preferences')
+        .upsert(
+          preferences.selectedCalendars.map(calId => ({
+            user_id: userId,
+            calendar_id: calId,
+            calendar_name: calId.split('@')[0],
+            is_selected: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })),
+          { onConflict: 'user_id,calendar_id' }
+        );
+
+      if (prefsError) throw prefsError;
 
       // Sync events after saving preferences
       await this.syncEvents(userId, preferences.token, preferences.selectedCalendars);
@@ -98,19 +123,24 @@ export class CalendarService {
         const data = await response.json();
         const googleEvents: GoogleCalendarEvent[] = data.items || [];
 
-        events.push(...googleEvents.map(event => ({
-          id: crypto.randomUUID(),
-          user_id: userId,
-          title: event.summary,
-          description: event.description || '',
-          location: event.location || '',
-          start_time: event.start.dateTime,
-          end_time: event.end.dateTime,
-          type: 'academic',
-          status: 'pending',
-          source: 'google',
-          google_event_id: event.id
-        })));
+        events.push(...googleEvents
+          .filter(event => event.start?.dateTime && event.end?.dateTime)
+          .map(event => ({
+            id: crypto.randomUUID(),
+            user_id: userId,
+            title: event.summary,
+            description: event.description || '',
+            location: event.location || '',
+            start_time: event.start.dateTime,
+            end_time: event.end.dateTime,
+            type: 'academic',
+            status: 'pending',
+            source: 'google',
+            google_event_id: event.id,
+            calendar_id: calendarId,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })));
       }
 
       // Delete existing Google Calendar events
@@ -122,19 +152,39 @@ export class CalendarService {
 
       if (deleteError) throw deleteError;
 
-      // Insert new events
+      // Insert new events in batches
       if (events.length > 0) {
-        const { error: insertError } = await supabase
-          .from('calendar_events')
-          .insert(events);
+        const batchSize = 100;
+        for (let i = 0; i < events.length; i += batchSize) {
+          const batch = events.slice(i, i + batchSize);
+          const { error: insertError } = await supabase
+            .from('calendar_events')
+            .insert(batch);
 
-        if (insertError) throw insertError;
+          if (insertError) throw insertError;
+        }
       }
 
       // Emit update event
       eventBus.emit(CALENDAR_EVENTS.UPDATED);
     } catch (error) {
       logger.error('Error syncing events:', error);
+      throw error;
+    }
+  }
+
+  static async getCalendarPreferences(userId: string): Promise<CalendarPreference[]> {
+    try {
+      const { data, error } = await supabase
+        .from('calendar_preferences')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('is_selected', true);
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      logger.error('Error getting calendar preferences:', error);
       throw error;
     }
   }

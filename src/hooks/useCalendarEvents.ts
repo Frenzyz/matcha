@@ -62,14 +62,21 @@ export function useCalendarEvents() {
     const unsubscribeDeleted = eventBus.on(CALENDAR_EVENTS.DELETED, updateEvents);
     const unsubscribeModified = eventBus.on(CALENDAR_EVENTS.MODIFIED, updateEvents);
 
+    // Subscribe to calendar update events
+    const handleCalendarUpdate = () => {
+      fetchEvents();
+    };
+    window.addEventListener('calendar-update', handleCalendarUpdate);
+
     return () => {
       unsubscribe();
       unsubscribeUpdated();
       unsubscribeAdded();
       unsubscribeDeleted();
       unsubscribeModified();
+      window.removeEventListener('calendar-update', handleCalendarUpdate);
     };
-  }, [updateEvents]);
+  }, [updateEvents, fetchEvents]);
 
   return {
     events,
