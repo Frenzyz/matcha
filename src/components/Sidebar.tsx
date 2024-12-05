@@ -1,7 +1,8 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Calendar, PieChart, Settings, GraduationCap } from 'lucide-react';
+import { Calendar, PieChart, Settings, GraduationCap, Users } from 'lucide-react';
 import { useThemeStore } from '../store/themeStore';
+import { useFeatureStore } from '../store/featureStore';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -10,10 +11,16 @@ interface SidebarProps {
 export default function Sidebar({ isOpen }: SidebarProps) {
   const location = useLocation();
   const { isDarkMode } = useThemeStore();
+  const { groupStudyEnabled } = useFeatureStore();
 
   const links = [
     { icon: Calendar, label: 'Dashboard', path: '/dashboard' },
     { icon: PieChart, label: 'Time Analysis', path: '/analysis' },
+    ...(groupStudyEnabled ? [{ 
+      icon: Users, 
+      label: 'Group Study (Beta)', 
+      path: '/group-study' 
+    }] : []),
     { icon: GraduationCap, label: 'Scholarships', path: '/scholarships' },
     { icon: Settings, label: 'Settings', path: '/settings' }
   ];

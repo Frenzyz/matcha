@@ -11,16 +11,18 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src')
+      '@': path.resolve(__dirname, './src'),
+      global: 'window'
     }
+  },
+  define: {
+    global: 'window',
   },
   server: {
     proxy: {
-      '/api': {
-        target: 'https://campusevents.charlotte.edu',
-        changeOrigin: true,
-        secure: false,
-        rewrite: (path) => path.replace(/^\/api/, '')
+      '/socket.io': {
+        target: 'http://localhost:3001',
+        ws: true
       }
     }
   },
@@ -32,12 +34,13 @@ export default defineConfig({
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
           ui: ['lucide-react', 'zustand'],
-          supabase: ['@supabase/supabase-js']
+          supabase: ['@supabase/supabase-js'],
+          webrtc: ['simple-peer', 'socket.io-client']
         }
       }
     }
   },
   optimizeDeps: {
-    include: ['@supabase/supabase-js']
+    include: ['@supabase/supabase-js', 'simple-peer']
   }
 });

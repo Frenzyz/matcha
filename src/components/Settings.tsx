@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useThemeStore } from '../store/themeStore';
+import { useFeatureStore } from '../store/featureStore';
 import { useUserData } from '../context/UserDataProvider';
 import { useAuth } from '../context/AuthContext';
 import { useDropzone } from 'react-dropzone';
@@ -10,11 +11,13 @@ import GoogleCalendarButton from '../components/GoogleCalendarButton';
 import ColorPicker from '../components/ColorPicker';
 import ErrorMessage from '../components/ErrorMessage';
 import LoadingSpinner from '../components/LoadingSpinner';
-import { Save, Key, Palette, Moon, Calendar, Upload, User, Settings as SettingsIcon } from 'lucide-react';
+import { Save, Key, Palette, Moon, Calendar, Upload, User, Settings as SettingsIcon, Beaker } from 'lucide-react';
 import CalendarSetup from '../components/CalendarSetup';
+import { Switch } from './ui/Switch';
 
 export default function Settings() {
   const { isDarkMode, toggleDarkMode } = useThemeStore();
+  const { groupStudyEnabled, toggleGroupStudy } = useFeatureStore();
   const { user } = useAuth();
   const { userData, loading, error, updateUserData } = useUserData();
   const [message, setMessage] = useState({ type: '', text: '' });
@@ -26,8 +29,7 @@ export default function Settings() {
     major: ''
   });
 
-  // Update form data when user data changes
-  React.useEffect(() => {
+  useEffect(() => {
     if (userData) {
       setFormData({
         first_name: userData.first_name || '',
@@ -36,23 +38,6 @@ export default function Settings() {
       });
     }
   }, [userData]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) return;
-
-    try {
-      setIsSaving(true);
-      setMessage({ type: '', text: '' });
-      await updateUserData(formData);
-      setMessage({ type: 'success', text: 'Profile updated successfully!' });
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to update profile';
-      setMessage({ type: 'error', text: errorMessage });
-    } finally {
-      setIsSaving(false);
-    }
-  };
 
   const { getRootProps, getInputProps } = useDropzone({
     accept: {
@@ -95,6 +80,23 @@ export default function Settings() {
     }
   });
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+
+    try {
+      setIsSaving(true);
+      setMessage({ type: '', text: '' });
+      await updateUserData(formData);
+      setMessage({ type: 'success', text: 'Profile updated successfully!' });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update profile';
+      setMessage({ type: 'error', text: errorMessage });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleGoogleSuccess = async (token: string) => {
     if (!user) return;
 
@@ -127,44 +129,8 @@ export default function Settings() {
     }
   };
 
-  if (loading) {
-    return <LoadingSpinner />;
-  }
-
-  if (error) {
-    return <ErrorMessage message={error} />;
-  }
-
-  if (showCalendarSetup && userData?.google_calendar_token) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pt-16 p-4">
-        <div className="max-w-3xl mx-auto bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-semibold text-gray-800 dark:text-white">
-              Configure Calendar
-            </h2>
-            <button
-              onClick={() => setShowCalendarSetup(false)}
-              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-            >
-              ×
-            </button>
-          </div>
-          <CalendarSetup
-            token={userData.google_calendar_token}
-            onComplete={() => {
-              setShowCalendarSetup(false);
-              setMessage({ type: 'success', text: 'Calendar settings updated successfully!' });
-            }}
-            onError={(error) => {
-              setMessage({ type: 'error', text: error.message });
-              setShowCalendarSetup(false);
-            }}
-          />
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <LoadingSpinner />;
+  if (error) return <ErrorMessage message={error} />;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pt-16">
@@ -175,6 +141,26 @@ export default function Settings() {
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">Settings</h1>
           
           <div className="space-y-6">
+            {/* Beta Features */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+              <div className="flex items-center gap-2 mb-6">
+                <Beaker className="h-6 w-6 text-emerald-500" />
+                <h2 className="text-xl font-semibold text-gray-800 dark:text-white">
+                  Beta Features
+                </h2>
+              </div>
+
+              <div className="space-y-6">
+                <Switch
+                  checked={groupStudyEnabled}
+                  onCheckedChange={toggleGroupStudy}
+                  label="Group Study Rooms"
+                  description="Enable real-time video study rooms with other students (Beta)"
+                  className="mb-4"
+                />
+              </div>
+            </div>
+
             {/* Profile Settings */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
               <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-6">

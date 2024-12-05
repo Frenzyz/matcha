@@ -9,6 +9,7 @@ import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
 import TimeAnalysis from './components/TimeAnalysis';
 import Scholarships from './pages/Scholarships';
+import GroupStudy from './pages/GroupStudy';
 import { UserDataProvider } from './context/UserDataProvider';
 import Landing from './pages/Landing';
 import About from './pages/About';
@@ -96,6 +97,11 @@ export default function App() {
             <Route path="/analysis" element={
               <PrivateRoute>
                 <TimeAnalysis />
+              </PrivateRoute>
+            } />
+            <Route path="/group-study" element={
+              <PrivateRoute>
+                <GroupStudy />
               </PrivateRoute>
             } />
             <Route path="/scholarships" element={

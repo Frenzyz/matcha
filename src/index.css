@@ -70,6 +70,20 @@ body {
   animation: calendar-glow 2s ease-in-out;
 }
 
+/* Video grid animations */
+.grid {
+  transition: grid-template-columns 0.3s ease-in-out;
+}
+
+.grid > div {
+  transition: all 0.3s ease-in-out;
+}
+
+/* Hover effects */
+.hover\:scale-105 {
+  transition: transform 0.2s ease-in-out;
+}
+
 /* Timeline animations */
 @keyframes slide-out {
   from {

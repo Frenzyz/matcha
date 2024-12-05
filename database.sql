@@ -1,138 +1,78 @@
--- Add Google Calendar integration columns to profiles table
+-- Enable RLS
+ALTER TABLE study_rooms ENABLE ROW LEVEL SECURITY;
+ALTER TABLE study_room_participants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE study_room_messages ENABLE ROW LEVEL SECURITY;
+
+-- Add beta_features column to profiles
 ALTER TABLE profiles 
-ADD COLUMN IF NOT EXISTS google_calendar_token TEXT,
-ADD COLUMN IF NOT EXISTS google_calendar_ids TEXT[];
+ADD COLUMN IF NOT EXISTS beta_features JSONB DEFAULT '{"groupStudy": false}'::jsonb;
 
--- Create index for Google Calendar token
-CREATE INDEX IF NOT EXISTS idx_profiles_google_calendar_token 
-ON profiles(google_calendar_token);
+-- Study rooms policies
+CREATE POLICY "Users can view all study rooms"
+ON study_rooms FOR SELECT
+TO authenticated
+USING (true);
 
--- Add RLS policies for Google Calendar columns
-ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can create study rooms"
+ON study_rooms FOR INSERT
+TO authenticated
+WITH CHECK (auth.uid() = created_by);
 
-DO $$
-BEGIN
-    -- Check and create policy for SELECT
-    IF NOT EXISTS (
-        SELECT 1
-        FROM pg_policies
-        WHERE tablename = 'profiles' AND policyname = 'Users can view their own calendar settings'
-    ) THEN
-        CREATE POLICY "Users can view their own calendar settings"
-            ON profiles FOR SELECT
-            USING (auth.uid() = id);
-    END IF;
-
-    -- Check and create policy for UPDATE
-    IF NOT EXISTS (
-        SELECT 1
-        FROM pg_policies
-        WHERE tablename = 'profiles' AND policyname = 'Users can update their own calendar settings'
-    ) THEN
-        CREATE POLICY "Users can update their own calendar settings"
-            ON profiles FOR UPDATE
-            USING (auth.uid() = id)
-            WITH CHECK (auth.uid() = id);
-    END IF;
-END;
-$$;
-
--- Create calendar_preferences table
-CREATE TABLE IF NOT EXISTS calendar_preferences (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    calendar_id TEXT NOT NULL,
-    calendar_name TEXT NOT NULL,
-    is_selected BOOLEAN DEFAULT true,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(user_id, calendar_id)
+CREATE POLICY "Admin can delete any room"
+ON study_rooms FOR DELETE
+TO authenticated
+USING (
+    auth.uid() = '8136b447-829e-41f7-8ade-e3a0bba52703' OR
+    auth.uid() = created_by
 );
 
--- Add RLS policies for calendar_preferences
-ALTER TABLE calendar_preferences ENABLE ROW LEVEL SECURITY;
+-- Participants policies
+CREATE POLICY "Users can view room participants"
+ON study_room_participants FOR SELECT
+TO authenticated
+USING (EXISTS (
+    SELECT 1 FROM study_rooms
+    WHERE id = room_id
+));
 
-DO $$
-BEGIN
-    -- Check and create policy for SELECT
-    IF NOT EXISTS (
-        SELECT 1
-        FROM pg_policies
-        WHERE tablename = 'calendar_preferences' AND policyname = 'Users can view their own calendar preferences'
-    ) THEN
-        CREATE POLICY "Users can view their own calendar preferences"
-            ON calendar_preferences FOR SELECT
-            USING (auth.uid() = user_id);
-    END IF;
+CREATE POLICY "Users can join rooms"
+ON study_room_participants FOR INSERT
+TO authenticated
+WITH CHECK (
+    EXISTS (
+        SELECT 1 FROM study_rooms
+        WHERE id = room_id
+        AND status = 'active'
+    )
+    AND auth.uid() = user_id
+);
 
-    -- Check and create policy for INSERT
-    IF NOT EXISTS (
-        SELECT 1
-        FROM pg_policies
-        WHERE tablename = 'calendar_preferences' AND policyname = 'Users can insert their own calendar preferences'
-    ) THEN
-        CREATE POLICY "Users can insert their own calendar preferences"
-            ON calendar_preferences FOR INSERT
-            WITH CHECK (auth.uid() = user_id);
-    END IF;
+CREATE POLICY "Users can leave rooms"
+ON study_room_participants FOR DELETE
+TO authenticated
+USING (auth.uid() = user_id);
 
-    -- Check and create policy for UPDATE
-    IF NOT EXISTS (
-        SELECT 1
-        FROM pg_policies
-        WHERE tablename = 'calendar_preferences' AND policyname = 'Users can update their own calendar preferences'
-    ) THEN
-        CREATE POLICY "Users can update their own calendar preferences"
-            ON calendar_preferences FOR UPDATE
-            USING (auth.uid() = user_id)
-            WITH CHECK (auth.uid() = user_id);
-    END IF;
+-- Messages policies
+CREATE POLICY "Users can view room messages"
+ON study_room_messages FOR SELECT
+TO authenticated
+USING (EXISTS (
+    SELECT 1 FROM study_room_participants
+    WHERE room_id = study_room_messages.room_id
+    AND user_id = auth.uid()
+));
 
-    -- Check and create policy for DELETE
-    IF NOT EXISTS (
-        SELECT 1
-        FROM pg_policies
-        WHERE tablename = 'calendar_preferences' AND policyname = 'Users can delete their own calendar preferences'
-    ) THEN
-        CREATE POLICY "Users can delete their own calendar preferences"
-            ON calendar_preferences FOR DELETE
-            USING (auth.uid() = user_id);
-    END IF;
-END;
-$$;
+CREATE POLICY "Users can send messages"
+ON study_room_messages FOR INSERT
+TO authenticated
+WITH CHECK (EXISTS (
+    SELECT 1 FROM study_room_participants
+    WHERE room_id = study_room_messages.room_id
+    AND user_id = auth.uid()
+));
 
--- Create function to update updated_at timestamp
-CREATE OR REPLACE FUNCTION update_calendar_preferences_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Drop trigger if it exists, then create it
-DO $$
-BEGIN
-    IF EXISTS (
-        SELECT 1
-        FROM pg_trigger
-        WHERE tgname = 'update_calendar_preferences_updated_at'
-    ) THEN
-        DROP TRIGGER update_calendar_preferences_updated_at ON calendar_preferences;
-    END IF;
-
-    CREATE TRIGGER update_calendar_preferences_updated_at
-        BEFORE UPDATE ON calendar_preferences
-        FOR EACH ROW
-        EXECUTE FUNCTION update_calendar_preferences_updated_at();
-END;
-$$;
-
--- Add missing columns to calendar_events table
-ALTER TABLE calendar_events 
-ADD COLUMN IF NOT EXISTS google_event_id TEXT,
-ADD COLUMN IF NOT EXISTS calendar_id TEXT;
-
--- Create index for Google event ID
-CREATE INDEX IF NOT EXISTS idx_calendar_events_google_event_id 
-ON calendar_events(google_event_id);
+-- Create indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_study_room_messages_room ON study_room_messages(room_id);
+CREATE INDEX IF NOT EXISTS idx_study_room_messages_created ON study_room_messages(created_at);
+CREATE INDEX IF NOT EXISTS idx_study_room_participants_room ON study_room_participants(room_id);
+CREATE INDEX IF NOT EXISTS idx_study_room_participants_user ON study_room_participants(user_id);

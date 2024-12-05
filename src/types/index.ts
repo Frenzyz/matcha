@@ -1,23 +1,28 @@
-import { Event as BaseEvent } from './event';
+export * from './event';
+export * from './chat';
+export * from './assignment';
+export * from './scholarship';
+export * from './study-room';
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  first_name?: string;
+  last_name?: string;
+  student_id?: string;
+  major?: string;
+  avatar_url?: string;
+  theme_color?: string;
+  setup_completed?: boolean;
+  google_calendar_token?: string;
+  beta_features?: {
+    [key: string]: boolean;
+  };
+  email_notifications?: boolean;
+  desktop_notifications?: boolean;
+  created_at: string;
+  updated_at: string;
+  last_seen?: string;
+}
 
 export type EventType = 'academic' | 'career' | 'wellness' | 'social';
-
-export interface Event extends BaseEvent {
-  id: string;
-  user_id: string;
-  title: string;
-  description?: string;
-  location?: string;
-  start_time: string;
-  end_time: string;
-  type: EventType;
-  status: 'pending' | 'completed';
-  attendees?: number;
-  is_recurring?: boolean;
-  recurrence_rule?: string;
-  source: 'manual' | 'scraped' | 'google' | 'canvas' | 'demo' | 'calendar';
-  created_at?: string;
-  updated_at?: string;
-  category_id?: string | null;
-  color?: string;
-}
