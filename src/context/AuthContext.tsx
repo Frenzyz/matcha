@@ -224,7 +224,7 @@ import * as React from 'react';
             password: newPassword,
             email_confirm: true,
             data: {
-              'token': token
+              token: token
             }
           });
           if (error) throw error;
