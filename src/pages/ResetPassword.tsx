@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
-    import { useNavigate, useSearchParams } from 'react-router-dom';
+    import { useNavigate } from 'react-router-dom';
     import { Leaf } from 'lucide-react';
     import { useAuth } from '../context/AuthContext';
 
     export default function ResetPassword() {
       const navigate = useNavigate();
       const { resetPassword } = useAuth();
-      const [searchParams] = useSearchParams();
       const [newPassword, setNewPassword] = useState('');
       const [confirmPassword, setConfirmPassword] = useState('');
       const [error, setError] = useState('');
@@ -15,13 +14,16 @@ import React, { useState, useEffect } from 'react';
       const [token, setToken] = useState<string | null>(null);
 
       useEffect(() => {
-        const tokenParam = searchParams.get('token');
+        // Extract token from hash fragment
+        const hash = window.location.hash;
+        const params = new URLSearchParams(hash.substring(1));
+        const tokenParam = params.get('token');
         if (tokenParam) {
           setToken(tokenParam);
         } else {
           setError('Invalid or missing token');
         }
-      }, [searchParams]);
+      }, []);
 
       const handleResetPassword = async (e: React.FormEvent) => {
         e.preventDefault();
