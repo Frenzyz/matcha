@@ -138,7 +138,7 @@ import * as React from 'react';
             email: credentials.email,
             password: credentials.password,
             options: {
-              emailRedirectTo: `${window.location.origin}/auth/callback`,
+              emailRedirectTo: `${window.location.origin}/reset-password`,
               data: {
                 first_name: credentials.firstName,
                 last_name: credentials.lastName,
