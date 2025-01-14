@@ -1,57 +1,66 @@
-import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import ErrorBoundary from './components/ErrorBoundary';
-import Layout from './components/Layout';
-import Login from './pages/Login';
-import Signup from './pages/Signup';
-import Dashboard from './pages/Dashboard';
-import Settings from './pages/Settings';
-import TimeAnalysis from './components/TimeAnalysis';
-import Scholarships from './pages/Scholarships';
-import GroupStudy from './pages/GroupStudy';
-import { UserDataProvider } from './context/UserDataProvider';
-import Landing from './pages/Landing';
-import About from './pages/About';
-import New from './pages/New';
-import Upcoming from './pages/Upcoming';
+import React, { useEffect } from 'react';
+    import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+    import { AuthProvider, useAuth } from './context/AuthContext';
+    import ErrorBoundary from './components/ErrorBoundary';
+    import Layout from './components/Layout';
+    import Login from './pages/Login';
+    import Signup from './pages/Signup';
+    import Dashboard from './pages/Dashboard';
+    import Settings from './pages/Settings';
+    import TimeAnalysis from './components/TimeAnalysis';
+    import Scholarships from './pages/Scholarships';
+    import GroupStudy from './pages/GroupStudy';
+    import { UserDataProvider } from './context/UserDataProvider';
+    import Landing from './pages/Landing';
+    import About from './pages/About';
+    import New from './pages/New';
+    import Upcoming from './pages/Upcoming';
+    import ResetPassword from './pages/ResetPassword';
+    import { useLinking } from './utils/linking';
 
-function PrivateRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, loading } = useAuth();
-  
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
-      </div>
-    );
-  }
-  
-  if (!isAuthenticated) {
-    return <Navigate to="/login" />;
-  }
+    function PrivateRoute({ children }: { children: React.ReactNode }) {
+      const { isAuthenticated, loading } = useAuth();
+      
+      if (loading) {
+        return (
+          <div className="min-h-screen flex items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
+          </div>
+        );
+      }
+      
+      if (!isAuthenticated) {
+        return <Navigate to="/login" />;
+      }
 
-  return (
-    <UserDataProvider>
-      <Layout>{children}</Layout>
-    </UserDataProvider>
-  );
-}
+      return (
+        <UserDataProvider>
+          <Layout>{children}</Layout>
+        </UserDataProvider>
+      );
+    }
 
-function PublicRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuth();
-  
-  if (isAuthenticated) {
-    return <Navigate to="/dashboard" replace />;
-  }
+    function PublicRoute({ children }: { children: React.ReactNode }) {
+      const { isAuthenticated } = useAuth();
+      
+      if (isAuthenticated) {
+        return <Navigate to="/dashboard" replace />;
+      }
 
-  return <>{children}</>;
-}
+      return <>{children}</>;
+    }
 
-export default function App() {
-  return (
-    <AuthProvider>
-      <ErrorBoundary>
+    function AppContent() {
+      const { getInitialURL, subscribe } = useLinking();
+
+      useEffect(() => {
+        const unsubscribe = subscribe(() => {
+          // No action needed here, the listener in useLinking handles the logic
+        });
+        return () => unsubscribe();
+      }, [subscribe]);
+
+      return (
         <BrowserRouter>
           <Routes>
             {/* Public Routes */}
@@ -87,6 +96,11 @@ export default function App() {
                 <Signup />
               </PublicRoute>
             } />
+            <Route path="/reset-password" element={
+              <PublicRoute>
+                <ResetPassword />
+              </PublicRoute>
+            } />
 
             {/* Protected Routes */}
             <Route path="/dashboard" element={
@@ -119,7 +133,15 @@ export default function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
-      </ErrorBoundary>
-    </AuthProvider>
-  );
-}
+      );
+    }
+
+    export default function App() {
+      return (
+        <AuthProvider>
+          <ErrorBoundary>
+            <AppContent />
+          </ErrorBoundary>
+        </AuthProvider>
+      );
+    }
