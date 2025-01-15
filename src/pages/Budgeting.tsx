@@ -251,20 +251,25 @@ const saveBudget = useCallback(
   // ----- Add Transaction -----
   const handleAddTransaction = async () => {
     if (!newTransaction.description || newTransaction.amount === 0) return;
-    let chosenColor: string | undefined;
-    const budget = customBudgets.find((b) => b.id === newTransaction.budgetId);
-    if (budget) chosenColor = budget.color;
-    const tx: Transaction = {
+
+    // Find chosen budget (if any) so we can copy its color
+    const chosenBudget = customBudgets.find((b) => b.id === newTransaction.budgetId);
+
+    const transaction: Transaction = {
       id: crypto.randomUUID(),
       description: newTransaction.description,
       amount: newTransaction.amount,
-      budgetId: newTransaction.budgetId || "",
-      color: chosenColor || "#888888"
+      budgetId: newTransaction.budgetId,
+      color: chosenBudget ? chosenBudget.color : '#888888'
     };
-    const updatedTransactions = [...transactions, tx];
+
+    const updatedTransactions = [...transactions, transaction];
     setTransactions(updatedTransactions);
-    setNewTransaction({ description: "", amount: 0, budgetId: "" });
-    setTimeout(() => saveBudget(), 0);
+
+    // Clear the form
+    setNewTransaction({ description: '', amount: 0, budgetId: '' });
+
+    await saveBudget(updatedTransactions, customBudgets);
   };
 
   // ----- Edit / Delete Transaction -----
