@@ -20,7 +20,6 @@ import {
   Upload,
   User,
   Settings as SettingsIcon,
-  Beaker,
   RotateCcw,
   Mail
 } from 'lucide-react';
@@ -30,9 +29,10 @@ import { sha256 } from 'js-sha256';
 
 export default function Settings() {
   const { isDarkMode, toggleDarkMode } = useThemeStore();
-  const { groupStudyEnabled, toggleGroupStudy, setBetaFeature } = useFeatureStore();
+  // Removed references to groupStudyEnabled, toggleGroupStudy, setBetaFeature
   const { user } = useAuth();
   const { userData, loading, error, updateUserData } = useUserData();
+
   const [message, setMessage] = useState({ type: '', text: '' });
   const [isSaving, setIsSaving] = useState(false);
   const [showCalendarSetup, setShowCalendarSetup] = useState(false);
@@ -175,8 +175,6 @@ export default function Settings() {
       try {
         setIsSaving(true);
         const hashedPassword = sha256(newPassword1);
-        // Here you might also want to verify the old password with your own logic,
-        // if needed. For example: await login({ email: user.email, password: currentPassword1 });
 
         const { error } = await supabase.auth.updateUser({
           password: hashedPassword
@@ -209,29 +207,6 @@ export default function Settings() {
       } finally {
         setIsSaving(false);
       }
-    }
-  };
-
-  const handleBetaFeatureToggle = async (enabled: boolean) => {
-    try {
-      setIsSaving(true);
-      await updateUserData({
-        beta_features: {
-          ...userData?.beta_features,
-          groupStudy: enabled
-        }
-      });
-      setBetaFeature('groupStudy', enabled);
-      setMessage({
-        type: 'success',
-        text: `Group Study feature ${enabled ? 'enabled' : 'disabled'} successfully!`
-      });
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : 'Failed to update beta features';
-      setMessage({ type: 'error', text: errorMessage });
-    } finally {
-      setIsSaving(false);
     }
   };
 
@@ -283,33 +258,10 @@ export default function Settings() {
           </h1>
 
           <div className="space-y-6">
-            {/* Beta Features */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <Beaker className="h-6 w-6 text-emerald-500" />
-                <h2 className="text-xl font-semibold text-gray-800 dark:text-white">
-                  Beta Features
-                </h2>
-              </div>
-
-              <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-                      Group Study Rooms
-                    </h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      Enable real-time video study rooms with other students
-                    </p>
-                  </div>
-                  <Switch
-                    checked={groupStudyEnabled}
-                    onCheckedChange={handleBetaFeatureToggle}
-                    disabled={isSaving}
-                  />
-                </div>
-              </div>
-            </div>
+            {/* 
+                Removed the entire Beta Features section here.
+                Everything else remains intact.
+            */}
 
             {/* Profile Settings */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">

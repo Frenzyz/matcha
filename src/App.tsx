@@ -23,7 +23,8 @@ import React, { useEffect, useState } from 'react';
     import Upcoming from './pages/Upcoming';
     import { useLinking } from './utils/linking';
     import ResetPasswordModal from './components/ResetPasswordModal';
-    import { supabase } from './config/supabase'; // Make sure to import supabase if you're referencing it
+    import { supabase } from './config/supabase';
+    import Budgeting from './pages/Budgeting'; // Import the new Budgeting component
 
     /**
      * A private route that checks for authentication.
@@ -69,7 +70,7 @@ import React, { useEffect, useState } from 'react';
      */
     function MainApp() {
       const { loginWithToken, session } = useAuth();
-      const navigate = useNavigate(); // <-- valid here because we're inside <BrowserRouter>
+      const navigate = useNavigate();
       const { subscribe } = useLinking();
 
       const [showResetModal, setShowResetModal] = useState(false);
@@ -206,6 +207,14 @@ import React, { useEffect, useState } from 'react';
               element={
                 <PrivateRoute>
                   <Settings />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/budgeting"
+              element={
+                <PrivateRoute>
+                  <Budgeting />
                 </PrivateRoute>
               }
             />
