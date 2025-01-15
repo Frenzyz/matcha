@@ -212,6 +212,14 @@ function MainApp() {
             </PrivateRoute>
           }
         />
+				<Route
+          path="/reset-password"
+          element={
+            <PrivateRoute>
+              <ResetPasswordModal />
+            </PrivateRoute>
+          }
+        />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
