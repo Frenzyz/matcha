@@ -9,6 +9,7 @@ import React from 'react';
       const animationDelay = getRandom(0, 5);
       const startPosition = getRandom(0, 100);
       const horizontalOffset = getRandom(-20, 20);
+      const initialVerticalPosition = getRandom(-100, 0); // Randomize initial vertical position
 
       const style = {
         width: `${size}px`,
@@ -16,7 +17,7 @@ import React from 'react';
         animationDuration: `${animationDuration}s`,
         animationDelay: `${animationDelay}s`,
         left: `${startPosition}%`,
-        transform: `translateX(${horizontalOffset}px) rotate(45deg)`
+        transform: `translateY(${initialVerticalPosition}px) translateX(${horizontalOffset}px) rotate(45deg)`
       };
 
       return <div className="floating-leaf" style={style} />;

@@ -14,23 +14,16 @@ import React, { useState, useEffect } from 'react';
       const [token, setToken] = useState<string | null>(null);
 
       useEffect(() => {
-        // Extract token and error from hash fragment
+        // Extract token from hash fragment
         const hash = window.location.hash;
         const params = new URLSearchParams(hash.substring(1));
         const tokenParam = params.get('token');
-        const errorCode = params.get('error_code');
-
-        if (errorCode === 'otp_expired') {
-          navigate('/token-expired', { replace: true });
-          return;
-        }
-
         if (tokenParam) {
           setToken(tokenParam);
         } else {
           setError('Invalid or missing token');
         }
-      }, [navigate]);
+      }, []);
 
       const handleResetPassword = async (e: React.FormEvent) => {
         e.preventDefault();

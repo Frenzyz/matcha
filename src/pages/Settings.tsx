@@ -11,13 +11,26 @@ import GoogleCalendarButton from '../components/GoogleCalendarButton';
 import ColorPicker from '../components/ColorPicker';
 import ErrorMessage from '../components/ErrorMessage';
 import LoadingSpinner from '../components/LoadingSpinner';
-import { Save, Key, Palette, Moon, Calendar, Upload, User, Settings as SettingsIcon, Beaker } from 'lucide-react';
+import {
+  Save,
+  Key,
+  Palette,
+  Moon,
+  Calendar,
+  Upload,
+  User,
+  Settings as SettingsIcon,
+  Beaker,
+  RotateCcw,
+  Mail
+} from 'lucide-react';
 import CalendarSetup from '../components/CalendarSetup';
 import { Switch } from '../components/ui/Switch';
+import { sha256 } from 'js-sha256';
 
 export default function Settings() {
   const { isDarkMode, toggleDarkMode } = useThemeStore();
-  const { groupStudyEnabled, toggleGroupStudy } = useFeatureStore();
+  const { groupStudyEnabled, toggleGroupStudy, setBetaFeature } = useFeatureStore();
   const { user } = useAuth();
   const { userData, loading, error, updateUserData } = useUserData();
   const [message, setMessage] = useState({ type: '', text: '' });
@@ -28,6 +41,12 @@ export default function Settings() {
     last_name: '',
     major: ''
   });
+  const [resetPasswordMode, setResetPasswordMode] = useState(false);
+  const [currentPassword1, setCurrentPassword1] = useState('');
+  const [currentPassword2, setCurrentPassword2] = useState('');
+  const [newPassword1, setNewPassword1] = useState('');
+  const [newPassword2, setNewPassword2] = useState('');
+  const [resetOption, setResetOption] = useState<'direct' | 'email'>('direct');
 
   useEffect(() => {
     if (userData) {
@@ -64,14 +83,15 @@ export default function Settings() {
 
         if (uploadError) throw uploadError;
 
-        const { data: { publicUrl } } = supabase.storage
-          .from('avatars')
-          .getPublicUrl(filePath);
+        const {
+          data: { publicUrl }
+        } = supabase.storage.from('avatars').getPublicUrl(filePath);
 
         await updateUserData({ avatar_url: publicUrl });
         setMessage({ type: 'success', text: 'Profile picture updated successfully!' });
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to upload profile picture';
+        const errorMessage =
+          err instanceof Error ? err.message : 'Failed to upload profile picture';
         setMessage({ type: 'error', text: errorMessage });
         logger.error('Profile picture upload error:', err);
       } finally {
@@ -122,26 +142,93 @@ export default function Settings() {
       await updateUserData({ google_calendar_token: null });
       setMessage({ type: 'success', text: 'Calendar disconnected successfully!' });
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to disconnect calendar';
+      const errorMessage =
+        err instanceof Error ? err.message : 'Failed to disconnect calendar';
       setMessage({ type: 'error', text: errorMessage });
     } finally {
       setIsSaving(false);
     }
   };
 
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+
+    if (resetOption === 'direct') {
+      if (!currentPassword1 || !currentPassword2) {
+        setMessage({ type: 'error', text: 'Please enter your current password' });
+        return;
+      }
+      if (currentPassword1 !== currentPassword2) {
+        setMessage({ type: 'error', text: 'Current passwords do not match' });
+        return;
+      }
+      if (!newPassword1 || !newPassword2) {
+        setMessage({ type: 'error', text: 'Please enter your new password' });
+        return;
+      }
+      if (newPassword1 !== newPassword2) {
+        setMessage({ type: 'error', text: 'New passwords do not match' });
+        return;
+      }
+
+      try {
+        setIsSaving(true);
+        const hashedPassword = sha256(newPassword1);
+        // Here you might also want to verify the old password with your own logic,
+        // if needed. For example: await login({ email: user.email, password: currentPassword1 });
+
+        const { error } = await supabase.auth.updateUser({
+          password: hashedPassword
+        });
+        if (error) throw error;
+        setMessage({ type: 'success', text: 'Password updated successfully!' });
+        setResetPasswordMode(false);
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : 'Failed to reset password';
+        setMessage({ type: 'error', text: errorMessage });
+      } finally {
+        setIsSaving(false);
+      }
+    } else {
+      try {
+        setIsSaving(true);
+        await supabase.auth.resetPasswordForEmail(user.email, {
+          redirectTo: `${window.location.origin}/login`
+        });
+        setMessage({
+          type: 'success',
+          text: 'A password reset link has been sent to your email.'
+        });
+        setResetPasswordMode(false);
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : 'Failed to send reset link';
+        setMessage({ type: 'error', text: errorMessage });
+      } finally {
+        setIsSaving(false);
+      }
+    }
+  };
+
   const handleBetaFeatureToggle = async (enabled: boolean) => {
     try {
       setIsSaving(true);
-      await updateUserData({ 
-        beta_features: { 
+      await updateUserData({
+        beta_features: {
           ...userData?.beta_features,
-          groupStudy: enabled 
+          groupStudy: enabled
         }
       });
-      toggleGroupStudy();
-      setMessage({ type: 'success', text: `Group Study feature ${enabled ? 'enabled' : 'disabled'} successfully!` });
+      setBetaFeature('groupStudy', enabled);
+      setMessage({
+        type: 'success',
+        text: `Group Study feature ${enabled ? 'enabled' : 'disabled'} successfully!`
+      });
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to update beta features';
+      const errorMessage =
+        err instanceof Error ? err.message : 'Failed to update beta features';
       setMessage({ type: 'error', text: errorMessage });
     } finally {
       setIsSaving(false);
@@ -170,7 +257,10 @@ export default function Settings() {
             token={userData.google_calendar_token}
             onComplete={() => {
               setShowCalendarSetup(false);
-              setMessage({ type: 'success', text: 'Calendar settings updated successfully!' });
+              setMessage({
+                type: 'success',
+                text: 'Calendar settings updated successfully!'
+              });
             }}
             onError={(error) => {
               setMessage({ type: 'error', text: error.message });
@@ -185,11 +275,13 @@ export default function Settings() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pt-16">
       <ConnectionStatus />
-      
+
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-3xl mx-auto">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">Settings</h1>
-          
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">
+            Settings
+          </h1>
+
           <div className="space-y-6">
             {/* Beta Features */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
@@ -203,7 +295,9 @@ export default function Settings() {
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">Group Study Rooms</h3>
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                      Group Study Rooms
+                    </h3>
                     <p className="text-sm text-gray-500 dark:text-gray-400">
                       Enable real-time video study rooms with other students
                     </p>
@@ -239,7 +333,10 @@ export default function Settings() {
                     )}
                     <div {...getRootProps()} className="absolute bottom-0 right-0">
                       <input {...getInputProps()} />
-                      <button type="button" className="p-2 bg-emerald-500 rounded-full text-white hover:bg-emerald-600">
+                      <button
+                        type="button"
+                        className="p-2 bg-emerald-500 rounded-full text-white hover:bg-emerald-600"
+                      >
                         <Upload size={16} />
                       </button>
                     </div>
@@ -254,7 +351,9 @@ export default function Settings() {
                     <input
                       type="text"
                       value={formData.first_name}
-                      onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, first_name: e.target.value })
+                      }
                       className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
                     />
                   </div>
@@ -265,7 +364,9 @@ export default function Settings() {
                     <input
                       type="text"
                       value={formData.last_name}
-                      onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, last_name: e.target.value })
+                      }
                       className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
                     />
                   </div>
@@ -278,7 +379,9 @@ export default function Settings() {
                   <input
                     type="text"
                     value={formData.major}
-                    onChange={(e) => setFormData({ ...formData, major: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, major: e.target.value })
+                    }
                     className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
                   />
                 </div>
@@ -344,20 +447,139 @@ export default function Settings() {
                 <GoogleCalendarButton
                   onSuccess={handleGoogleSuccess}
                   onError={(error) => {
-                    setMessage({ 
-                      type: 'error', 
-                      text: error instanceof Error ? error.message : 'Failed to connect Google Calendar'
+                    setMessage({
+                      type: 'error',
+                      text:
+                        error instanceof Error
+                          ? error.message
+                          : 'Failed to connect Google Calendar'
                     });
                   }}
                 />
               )}
             </div>
+
+            {/* Password Reset */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+              <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-6">
+                Password Reset
+              </h2>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                Choose how you want to reset your password.
+              </p>
+              <div className="flex gap-4 mb-4">
+                <button
+                  onClick={() => {
+                    setResetOption('direct');
+                    setResetPasswordMode(true);
+                  }}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg border ${
+                    resetOption === 'direct'
+                      ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
+                      : 'border-gray-300 dark:border-gray-600'
+                  } hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors`}
+                >
+                  <RotateCcw size={16} />
+                  Reset Directly
+                </button>
+                <button
+                  onClick={() => {
+                    setResetOption('email');
+                    setResetPasswordMode(true);
+                  }}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg border ${
+                    resetOption === 'email'
+                      ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
+                      : 'border-gray-300 dark:border-gray-600'
+                  } hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors`}
+                >
+                  <Mail size={16} />
+                  Reset via Email
+                </button>
+              </div>
+              {resetPasswordMode && (
+                <form onSubmit={handleResetPassword} className="space-y-4">
+                  {resetOption === 'direct' && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Current Password
+                        </label>
+                        <input
+                          type="password"
+                          required
+                          value={currentPassword1}
+                          onChange={(e) => setCurrentPassword1(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Confirm Current Password
+                        </label>
+                        <input
+                          type="password"
+                          required
+                          value={currentPassword2}
+                          onChange={(e) => setCurrentPassword2(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          New Password
+                        </label>
+                        <input
+                          type="password"
+                          required
+                          value={newPassword1}
+                          onChange={(e) => setNewPassword1(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Confirm New Password
+                        </label>
+                        <input
+                          type="password"
+                          required
+                          value={newPassword2}
+                          onChange={(e) => setNewPassword2(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+                        />
+                      </div>
+                    </>
+                  )}
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setResetPasswordMode(false)}
+                      className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSaving}
+                      className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+                    >
+                      {isSaving ? 'Sending...' : 'Reset Password'}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
           </div>
 
           {message.text && (
-            <div className={`mt-4 p-4 rounded-md ${
-              message.type === 'success' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
-            }`}>
+            <div
+              className={`mt-4 p-4 rounded-md ${
+                message.type === 'success'
+                  ? 'bg-emerald-50 text-emerald-700'
+                  : 'bg-red-50 text-red-700'
+              }`}
+            >
               {message.text}
             </div>
           )}

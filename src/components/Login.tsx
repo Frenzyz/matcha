@@ -2,6 +2,7 @@ import React, { useState } from 'react';
     import { useNavigate, Link } from 'react-router-dom';
     import { Leaf } from 'lucide-react';
     import { useAuth } from '../context/AuthContext';
+    import FloatingLeaves from '../components/FloatingLeaves';
 
     export default function Login() {
       const navigate = useNavigate();
@@ -42,11 +43,12 @@ import React, { useState } from 'react';
       };
 
       return (
-        <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-emerald-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-          <div className="sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-emerald-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative">
+          <FloatingLeaves />
+          <div className="sm:mx-auto sm:w-full sm:max-w-md z-10">
             <div className="flex justify-center">
               <div className="rounded-full bg-emerald-100 p-3">
-                <Leaf className="text-emerald-600" size={48} />
+                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="lucide lucide-leaf text-emerald-600"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"></path><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"></path></svg>
               </div>
             </div>
             <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
@@ -57,7 +59,7 @@ import React, { useState } from 'react';
             </p>
           </div>
 
-          <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+          <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md z-10">
             <div className="bg-white py-8 px-4 shadow-lg sm:rounded-lg sm:px-10">
               {error && (
                 <div className="mb-4 p-2 bg-red-50 text-red-500 text-sm rounded">

@@ -12,6 +12,7 @@ import * as React from 'react';
       logout: () => Promise<void>;
       forgotPassword: (email: string) => Promise<void>;
       resetPassword: (newPassword: string, token: string) => Promise<void>;
+      loginWithToken: (tokens: { access_token: string; refresh_token: string }) => Promise<void>;
       loading: boolean;
     }
 
@@ -234,6 +235,18 @@ import * as React from 'react';
         }
       };
 
+      const loginWithToken = async (tokens: { access_token: string; refresh_token: string }) => {
+        try {
+          const { data, error } = await supabase.auth.setSession(tokens);
+          if (error) throw error;
+          setUser(data.user);
+          setSession(data.session);
+        } catch (error) {
+          logger.error('Login with token error:', error);
+          throw new Error(error instanceof Error ? error.message : 'Failed to login with token');
+        }
+      };
+
       const value = {
         user,
         session,
@@ -243,6 +256,7 @@ import * as React from 'react';
         logout,
         forgotPassword,
         resetPassword,
+        loginWithToken,
         loading
       };
 
