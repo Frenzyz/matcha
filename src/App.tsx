@@ -73,10 +73,8 @@ function MainApp() {
       const token = parsedUrl.searchParams.get('token');
 
       if (type === 'recovery' && token) {
-        console.log('Received reset token:', token); // Debug log
         setResetToken(token);
         setShowResetModal(true);
-        return; // Avoid logging in during password recovery flow
       }
 
       const access_token = parsedUrl.searchParams.get('access_token');
@@ -96,7 +94,6 @@ function MainApp() {
       const { data: authListener } = supabase.auth.onAuthStateChange(
         (event, updatedSession) => {
           if (event === 'PASSWORD_RECOVERY' && updatedSession?.access_token) {
-            console.log('Supabase password recovery event detected');
             setResetToken(updatedSession.access_token);
             setShowResetModal(true);
           }
@@ -123,12 +120,45 @@ function MainApp() {
             </PublicRoute>
           }
         />
-        {/* Other Routes */}
+        <Route
+          path="/about"
+          element={
+            <PublicRoute>
+              <About />
+            </PublicRoute>
+          }
+        />
+        <Route
+          path="/new"
+          element={
+            <PublicRoute>
+              <New />
+            </PublicRoute>
+          }
+        />
+        <Route
+          path="/upcoming"
+          element={
+            <PublicRoute>
+              <Upcoming />
+            </PublicRoute>
+          }
+        />
+
+        {/* Auth Routes */}
         <Route
           path="/login"
           element={
             <PublicRoute>
               <Login />
+            </PublicRoute>
+          }
+        />
+        <Route
+          path="/signup"
+          element={
+            <PublicRoute>
+              <Signup />
             </PublicRoute>
           }
         />
@@ -142,13 +172,60 @@ function MainApp() {
             </PrivateRoute>
           }
         />
+        <Route
+          path="/analysis"
+          element={
+            <PrivateRoute>
+              <TimeAnalysis />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/group-study"
+          element={
+            <PrivateRoute>
+              <GroupStudy />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/scholarships"
+          element={
+            <PrivateRoute>
+              <Scholarships />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <PrivateRoute>
+              <Settings />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/budgeting"
+          element={
+            <PrivateRoute>
+              <Budgeting />
+            </PrivateRoute>
+          }
+        />
+				<Route
+          path="/reset-password"
+          element={
+            <PrivateRoute>
+              <ResetPasswordModal />
+            </PrivateRoute>
+          }
+        />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
-      {/* Reset Password Modal */}
-      {showResetModal && resetToken && (
+      {showResetModal && (
         <ResetPasswordModal
           token={resetToken}
           onClose={() => {
@@ -161,7 +238,6 @@ function MainApp() {
     </>
   );
 }
-
 
 export default function App() {
   return (
