@@ -25,6 +25,7 @@ import { useLinking } from './utils/linking';
 import ResetPasswordModal from './components/ResetPasswordModal';
 import { supabase } from './config/supabase';
 import Budgeting from './pages/Budgeting';
+import VerifyOtp from './components/VerifyOtp';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth();
@@ -159,6 +160,14 @@ function MainApp() {
           element={
             <PublicRoute>
               <Signup />
+            </PublicRoute>
+          }
+        />
+        <Route
+          path="/verify-otp"
+          element={
+            <PublicRoute>
+              <VerifyOtp />
             </PublicRoute>
           }
         />
