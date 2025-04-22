@@ -26,6 +26,8 @@ import ResetPasswordModal from './components/ResetPasswordModal';
 import { supabase } from './config/supabase';
 import Budgeting from './pages/Budgeting';
 import VerifyOtp from './components/VerifyOtp';
+import SupabaseDebug from './components/SupabaseDebug';
+import DebugPage from './pages/DebugPage';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth();
@@ -172,6 +174,14 @@ function MainApp() {
           }
         />
 
+        {/* Debug Route - only in development */}
+        {import.meta.env.DEV && (
+          <Route
+            path="/debug"
+            element={<DebugPage />}
+          />
+        )}
+
         {/* Protected Routes */}
         <Route
           path="/dashboard"
@@ -244,6 +254,9 @@ function MainApp() {
           }}
         />
       )}
+      
+      {/* Supabase Debug Component (only in development) */}
+      {import.meta.env.DEV && <SupabaseDebug />}
     </>
   );
 }

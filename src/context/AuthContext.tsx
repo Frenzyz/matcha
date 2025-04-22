@@ -20,7 +20,7 @@ interface AuthContextType {
 
 interface LoginCredentials {
   email: string;
-  password?: string;
+  password: string;
 }
 
 interface SignupCredentials extends LoginCredentials {
@@ -93,13 +93,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (credentials: LoginCredentials) => {
     try {
+      if (!credentials.email || !credentials.password) {
+        throw new Error('Email and password are required');
+      }
+
+      // Log authentication attempt (without sensitive data)
+      logger.info('Attempting login', { email: credentials.email });
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email: credentials.email,
-        password: credentials.password || ''
+        password: credentials.password
       });
 
-      if (error) throw error;
-      if (!data.user) throw new Error('Login failed');
+      if (error) {
+        logger.error('Login error from Supabase:', error);
+        throw error;
+      }
+      
+      if (!data.user) {
+        logger.error('Login succeeded but no user returned');
+        throw new Error('Login failed - no user returned');
+      }
+
+      logger.info('Login successful', { 
+        userId: data.user.id,
+        email: data.user.email
+      });
 
       setUser(data.user);
       setSession(data.session);
@@ -113,6 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Create profile if it doesn't exist
       if (!profile && !profileError) {
+        logger.info('Creating profile for user', { userId: data.user.id });
         const { error: createError } = await supabase
           .from('profiles')
           .insert([{
@@ -126,6 +146,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           logger.error('Profile creation failed:', createError);
           throw new Error('Failed to create user profile');
         }
+      } else if (profileError && profileError.code !== 'PGRST116') {
+        // PGRST116 is "not found" error, which we handle above
+        logger.error('Error checking for profile:', profileError);
       }
     } catch (error) {
       if (error instanceof AuthError) {
@@ -225,7 +248,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const { error } = await supabase.auth.updateUser({
         password: newPassword,
-        email_confirm: true,
         data: {
           token: token
         }

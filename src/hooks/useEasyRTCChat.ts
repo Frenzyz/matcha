@@ -14,13 +14,39 @@ export function useEasyRTCChat(roomId: string) {
   const [error, setError] = useState<string | null>(null);
   const easyrtcRef = useRef<any>(null);
   const selfIdRef = useRef<string | null>(null);
+  const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const initializeEasyRTC = async () => {
       try {
-        // Wait for EasyRTC to be available
-        while (!window.easyrtc) {
-          await new Promise(resolve => setTimeout(resolve, 100));
+        // Set a timeout for EasyRTC loading
+        let loadingTimedOut = false;
+        loadTimeoutRef.current = setTimeout(() => {
+          loadingTimedOut = true;
+          setError('EasyRTC failed to load. Using limited functionality.');
+          logger.error('EasyRTC timed out loading');
+        }, 5000); // 5 second timeout
+
+        // Try to wait for EasyRTC to be available
+        let retries = 0;
+        const maxRetries = 10;
+        
+        while (!window.easyrtc && !loadingTimedOut && retries < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+          retries++;
+        }
+        
+        // Clear the timeout if we didn't time out
+        if (loadTimeoutRef.current) {
+          clearTimeout(loadTimeoutRef.current);
+          loadTimeoutRef.current = null;
+        }
+        
+        // If EasyRTC is not available, set up a basic fallback
+        if (!window.easyrtc) {
+          logger.warn('EasyRTC not available, setting up fallback implementation');
+          setupFallbackChat();
+          return;
         }
 
         const easyrtc = window.easyrtc;
@@ -73,35 +99,52 @@ export function useEasyRTCChat(roomId: string) {
         logger.error('Chat initialization error:', err);
       }
     };
+    
+    const setupFallbackChat = () => {
+      // Simple fallback that just allows local messages without real peer connection
+      setConnected(true);
+      setError('Using local-only chat (no peer connections)');
+      logger.warn('Using fallback chat implementation');
+    };
 
     initializeEasyRTC();
 
     return () => {
+      if (loadTimeoutRef.current) {
+        clearTimeout(loadTimeoutRef.current);
+      }
       if (easyrtcRef.current) {
-        easyrtcRef.current.disconnect();
+        try {
+          easyrtcRef.current.disconnect();
+        } catch (err) {
+          logger.error('Error disconnecting:', err);
+        }
       }
     };
   }, [roomId]);
 
   const sendMessage = useCallback(async (content: string) => {
-    if (!connected || !easyrtcRef.current) {
+    if (!connected) {
       throw new Error('Not connected to chat');
     }
 
     try {
-      const peersInRoom = easyrtcRef.current.getRoomOccupantsAsArray(roomId);
-      
-      // Send to all peers in room
-      await Promise.all(peersInRoom.map(peerId => 
-        new Promise((resolve, reject) => {
-          easyrtcRef.current.sendDataWS(peerId, 'chat', content,
-            () => resolve(undefined),
-            (err: any) => reject(err)
-          );
-        })
-      ));
+      // If we have EasyRTC reference, use it to send to peers
+      if (easyrtcRef.current) {
+        const peersInRoom = easyrtcRef.current.getRoomOccupantsAsArray(roomId);
+        
+        // Send to all peers in room
+        await Promise.all(peersInRoom.map((peerId: string) => 
+          new Promise((resolve, reject) => {
+            easyrtcRef.current.sendDataWS(peerId, 'chat', content,
+              () => resolve(undefined),
+              (err: any) => reject(err)
+            );
+          })
+        ));
+      }
 
-      // Add own message to list
+      // Add own message to list (always do this, even in fallback mode)
       const message: ChatMessage = {
         id: crypto.randomUUID(),
         senderId: 'self',
