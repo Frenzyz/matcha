@@ -3,7 +3,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Ba
 import { useThemeStore } from '../store/themeStore';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../config/supabase';
-import { Event, EventType } from '../types';
+import { Event, EventType } from '../types/index';
 import { eventBus, CALENDAR_EVENTS } from '../services/eventBus';
 import { format, addDays, parseISO, startOfWeek, endOfWeek, differenceInHours } from 'date-fns';
 import LoadingSpinner from './LoadingSpinner';
@@ -80,11 +80,25 @@ export default function TimeAnalysis() {
     }
   };
 
-  // Calculate hours for an event
+  // Calculate hours for an event with improved logic
   const calculateEventHours = (start: Date, end: Date, type: EventType): number => {
-    // Calculate actual duration but minimum 0.5 hour
-    const hours = Math.max(0.5, differenceInHours(end, start, { roundingMethod: 'ceil' }));
-    return hours;
+    // Calculate actual duration in hours
+    const durationMs = end.getTime() - start.getTime();
+    const hours = durationMs / (1000 * 60 * 60);
+    
+    // Handle invalid time ranges
+    if (hours <= 0) {
+      console.warn('Invalid event duration detected:', { start, end, type });
+      return 0;
+    }
+    
+    // For academic events, use actual duration but with a minimum of 30 minutes
+    if (type === 'academic') {
+      return Math.max(0.5, hours);
+    }
+    
+    // For other event types, use actual duration with minimum 15 minutes
+    return Math.max(0.25, hours);
   };
 
   // Calculate time distribution
@@ -98,20 +112,25 @@ export default function TimeAnalysis() {
       free: HOURS_IN_WEEK - RECOMMENDED_SLEEP
     };
 
+    let totalEventHours = 0;
+    
     events.forEach(event => {
       const start = parseISO(event.start_time);
       const end = parseISO(event.end_time);
       const eventHours = calculateEventHours(start, end, event.type);
       
-      if (event.type in distribution) {
+      if (event.type in distribution && eventHours > 0) {
         distribution[event.type] += eventHours;
-        distribution.free -= eventHours;
+        totalEventHours += eventHours;
       }
     });
 
-    // Ensure no negative values and round all values
+    // Calculate free time based on total event hours, ensuring it's not negative
+    distribution.free = Math.max(0, HOURS_IN_WEEK - RECOMMENDED_SLEEP - totalEventHours);
+
+    // Round all values to 1 decimal place for better precision
     Object.keys(distribution).forEach(key => {
-      distribution[key] = Math.max(0, Math.round(distribution[key]));
+      distribution[key] = Math.round(distribution[key] * 10) / 10;
     });
 
     return [
@@ -299,7 +318,7 @@ export default function TimeAnalysis() {
         {timeData.map((item) => (
           <div key={item.name} className="flex items-center gap-2">
             <div className="w-4 h-4 rounded-full" style={{ backgroundColor: item.color }} />
-            <span>{item.name}: {Math.round(item.value)} hours</span>
+            <span>{item.name}: {item.value} hours</span>
           </div>
         ))}
       </div>

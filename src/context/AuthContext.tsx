@@ -46,19 +46,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [initialized, setInitialized] = React.useState(false);
 
   React.useEffect(() => {
+    let isMounted = true;
+    let subscription: { unsubscribe: () => void } | null = null;
+
     const initializeAuth = async () => {
       try {
         // Get the current session
         const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
         if (sessionError) throw sessionError;
 
-        if (currentSession) {
+        // Check if component is still mounted before updating state
+        if (isMounted && currentSession) {
           setSession(currentSession);
           setUser(currentSession.user);
         }
 
         // Set up auth state listener
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+        const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+          // Only process auth changes if component is still mounted
+          if (!isMounted) return;
+          
           logger.info('Auth state changed:', event);
           
           if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
@@ -70,20 +77,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         });
 
-        setInitialized(true);
-        return () => {
-          subscription.unsubscribe();
-        };
+        subscription = authSubscription;
+
+        if (isMounted) {
+          setInitialized(true);
+        }
       } catch (error) {
         logger.error('Error initializing auth:', error);
-        setUser(null);
-        setSession(null);
+        if (isMounted) {
+          setUser(null);
+          setSession(null);
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
     initializeAuth();
+
+    // Cleanup function
+    return () => {
+      isMounted = false;
+      if (subscription) {
+        subscription.unsubscribe();
+      }
+    };
   }, []);
 
   const handleAuthError = (error: AuthError): never => {
