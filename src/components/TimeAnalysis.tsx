@@ -68,14 +68,23 @@ export default function TimeAnalysis() {
   };
 
   const calculateEventHours = (start: Date, end: Date, type: string): number => {
-    // Academic events are always counted as 1 hour
-    if (type === 'academic') {
-      return 1;
+    // Calculate actual duration in hours
+    const durationMs = end.getTime() - start.getTime();
+    const hours = durationMs / (1000 * 60 * 60);
+    
+    // Handle invalid time ranges
+    if (hours <= 0) {
+      console.warn('Invalid event duration detected:', { start, end, type });
+      return 0;
     }
     
-    // For other event types, calculate actual duration but minimum 1 hour
-    const hours = Math.max(1, (end.getTime() - start.getTime()) / (1000 * 60 * 60));
-    return Math.round(hours);
+    // For academic events, use actual duration but with a minimum of 30 minutes
+    if (type === 'academic') {
+      return Math.max(0.5, hours);
+    }
+    
+    // For other event types, use actual duration with minimum 15 minutes
+    return Math.max(0.25, hours);
   };
 
   const calculateTimeDistribution = (events: Event[]): TimeData[] => {
@@ -87,20 +96,25 @@ export default function TimeAnalysis() {
       free: HOURS_IN_WEEK - RECOMMENDED_SLEEP
     };
 
+    let totalEventHours = 0;
+    
     events.forEach(event => {
       const start = new Date(event.start_time);
       const end = new Date(event.end_time);
       const eventHours = calculateEventHours(start, end, event.type);
       
-      if (event.type in distribution) {
+      if (event.type in distribution && eventHours > 0) {
         distribution[event.type] += eventHours;
-        distribution.free -= eventHours;
+        totalEventHours += eventHours;
       }
     });
 
-    // Ensure no negative values and round all values
+    // Calculate free time based on total event hours, ensuring it's not negative
+    distribution.free = Math.max(0, HOURS_IN_WEEK - RECOMMENDED_SLEEP - totalEventHours);
+
+    // Round all values to 1 decimal place for better precision
     Object.keys(distribution).forEach(key => {
-      distribution[key] = Math.max(0, Math.round(distribution[key]));
+      distribution[key] = Math.round(distribution[key] * 10) / 10;
     });
 
     return [
@@ -175,7 +189,7 @@ export default function TimeAnalysis() {
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value: number) => `${Math.round(value)} hours`} />
+                <Tooltip formatter={(value: number) => `${value} hours`} />
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
@@ -190,7 +204,7 @@ export default function TimeAnalysis() {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />
                 <YAxis />
-                <Tooltip formatter={(value: number) => `${Math.round(value)} hours`} />
+                <Tooltip formatter={(value: number) => `${value} hours`} />
                 <Legend />
                 <Bar dataKey="sleep" fill="#4B5563" stackId="a" />
                 <Bar dataKey="academic" fill="#10B981" stackId="a" />
@@ -206,7 +220,7 @@ export default function TimeAnalysis() {
         {timeData.map((item) => (
           <div key={item.name} className="flex items-center gap-2">
             <div className="w-4 h-4 rounded-full" style={{ backgroundColor: item.color }} />
-            <span>{item.name}: {Math.round(item.value)} hours</span>
+            <span>{item.name}: {item.value} hours</span>
           </div>
         ))}
       </div>
