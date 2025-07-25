@@ -247,4 +247,24 @@ export class CalendarService {
       throw error;
     }
   }
+
+  static async syncCalendarEvents(userId: string, token: string, calendarIds: string[]): Promise<void> {
+    try {
+      // Validate inputs
+      if (!userId || !token || !calendarIds.length) {
+        throw new Error('Missing required parameters for calendar sync');
+      }
+
+      // Call internal syncEvents method
+      await this.syncEvents(userId, token, calendarIds);
+
+      // Trigger update event
+      eventBus.emit(CALENDAR_EVENTS.UPDATED);
+
+      logger.info('Calendar events synchronized successfully', { userId });
+    } catch (error) {
+      logger.error('Error in syncCalendarEvents:', error);
+      throw error;
+    }
+  }
 }

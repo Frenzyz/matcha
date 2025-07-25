@@ -1,4 +1,3 @@
-export * from './event';
 export * from './chat';
 export * from './assignment';
 export * from './scholarship';
@@ -26,3 +25,25 @@ export interface UserProfile {
 }
 
 export type EventType = 'academic' | 'career' | 'wellness' | 'social';
+
+export interface Event {
+  id: string;
+  user_id: string;
+  title: string;
+  description?: string;
+  location?: string;
+  start_time: string;
+  end_time: string;
+  type: EventType;
+  status: 'pending' | 'completed';
+  attendees?: number;
+  is_recurring?: boolean;
+  recurrence_rule?: string;
+  source: 'manual' | 'google' | 'auto';
+  google_event_id?: string;
+  calendar_id?: string;
+  category_id?: string;
+  color?: string;
+  created_at?: string;
+  updated_at?: string;
+}

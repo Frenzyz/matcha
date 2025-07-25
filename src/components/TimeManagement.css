@@ -1,0 +1,226 @@
+/* Time Management Component Styles */
+
+/* Animations for drag and drop */
+@keyframes dropFlash {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Smooth transitions for interactions */
+.time-management-container {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+/* Event drag states */
+.event-dragging {
+  opacity: 0.3;
+  transform: scale(0.95);
+  transition: all 0.2s ease;
+}
+
+.event-ghost {
+  pointer-events: none;
+  transform: rotate(3deg) scale(1.05);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+  transition: none;
+}
+
+/* Drop indicators */
+.drop-indicator {
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+/* Timeline grid enhancements */
+.timeline-grid {
+  position: relative;
+}
+
+.timeline-grid::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(0, 0, 0, 0.02) 50%,
+    transparent 100%
+  );
+  pointer-events: none;
+}
+
+/* Event hover effects */
+.event-card {
+  transition: all 0.2s ease;
+}
+
+.event-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.event-card:active {
+  transform: scale(0.98);
+}
+
+/* Header animations */
+.header-nav {
+  animation: slideIn 0.4s ease-out;
+}
+
+/* Loading states */
+.loading-skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.1) 25%,
+    rgba(255, 255, 255, 0.2) 50%,
+    rgba(255, 255, 255, 0.1) 75%
+  );
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Custom scrollbar */
+.timeline-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.timeline-scroll::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+}
+
+.timeline-scroll::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+}
+
+.timeline-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+/* Dark mode adjustments */
+.dark .timeline-scroll::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.dark .timeline-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.dark .timeline-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .timeline-day {
+    min-width: 150px;
+  }
+  
+  .event-card {
+    font-size: 0.75rem;
+    padding: 0.5rem;
+  }
+  
+  .timeline-header {
+    padding: 0.75rem;
+  }
+}
+
+/* Focus states for accessibility */
+.event-card:focus {
+  outline: 2px solid #10b981;
+  outline-offset: 2px;
+}
+
+.timeline-slot:focus {
+  background: rgba(16, 185, 129, 0.1);
+  outline: 2px solid #10b981;
+  outline-offset: -2px;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .event-card {
+    border-width: 2px;
+  }
+  
+  .timeline-grid {
+    border-width: 2px;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .event-card,
+  .drop-indicator,
+  .time-management-container {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* Print styles */
+@media print {
+  .drag-handle,
+  .action-buttons {
+    display: none;
+  }
+  
+  .event-card {
+    box-shadow: none;
+    border: 1px solid #ccc;
+  }
+} 

@@ -13,7 +13,6 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
-import TimeAnalysis from './components/TimeAnalysis';
 import Scholarships from './pages/Scholarships';
 import GroupStudy from './pages/GroupStudy';
 import { UserDataProvider } from './context/UserDataProvider';
@@ -23,11 +22,12 @@ import New from './pages/New';
 import Upcoming from './pages/Upcoming';
 import { useLinking } from './utils/linking';
 import ResetPasswordModal from './components/ResetPasswordModal';
+import ResetPassword from './pages/ResetPassword';
 import { supabase } from './config/supabase';
 import Budgeting from './pages/Budgeting';
 import VerifyOtp from './components/VerifyOtp';
-import SupabaseDebug from './components/SupabaseDebug';
 import DebugPage from './pages/DebugPage';
+import TimeManagement from './pages/TimeManagement';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth();
@@ -70,6 +70,42 @@ function MainApp() {
   const [resetToken, setResetToken] = useState<string | null>(null);
 
   useEffect(() => {
+    const handleHashParams = () => {
+      const hash = window.location.hash;
+      if (hash && hash.length > 1) {
+        try {
+          const params = new URLSearchParams(hash.substring(1));
+          const type = params.get('type');
+          const access_token = params.get('access_token');
+          const refresh_token = params.get('refresh_token');
+
+          if (type === 'recovery' && access_token) {
+            console.log('Recovery token detected in URL hash');
+            setResetToken(access_token);
+            setShowResetModal(true);
+            return;
+          }
+
+          if (access_token && refresh_token) {
+            console.log('Auth tokens detected in URL hash');
+            loginWithToken({ access_token, refresh_token });
+            navigate('/dashboard', { replace: true });
+          }
+        } catch (error) {
+          console.error('Error parsing URL hash parameters:', error);
+        }
+      }
+    };
+
+    handleHashParams();
+
+    window.addEventListener('hashchange', handleHashParams);
+    return () => {
+      window.removeEventListener('hashchange', handleHashParams);
+    };
+  }, [loginWithToken, navigate]);
+
+  useEffect(() => {
     const unsubscribe = subscribe(async (url) => {
       const parsedUrl = new URL(url);
       const type = parsedUrl.searchParams.get('type');
@@ -94,7 +130,7 @@ function MainApp() {
 
   useEffect(() => {
     if (session?.user) {
-      const { data: authListener } = supabase.auth.onAuthStateChange(
+      const { data } = supabase.auth.onAuthStateChange(
         (event, updatedSession) => {
           if (event === 'PASSWORD_RECOVERY' && updatedSession?.access_token) {
             setResetToken(updatedSession.access_token);
@@ -104,8 +140,8 @@ function MainApp() {
       );
 
       return () => {
-        if (authListener && typeof authListener.unsubscribe === 'function') {
-          authListener.unsubscribe();
+        if (data && data.subscription && typeof data.subscription.unsubscribe === 'function') {
+          data.subscription.unsubscribe();
         }
       };
     }
@@ -173,6 +209,12 @@ function MainApp() {
             </PublicRoute>
           }
         />
+        
+        {/* Add standalone reset password page - accessible without login */}
+        <Route
+          path="/reset-password"
+          element={<ResetPassword />}
+        />
 
         {/* Debug Route - only in development */}
         {import.meta.env.DEV && (
@@ -192,10 +234,10 @@ function MainApp() {
           }
         />
         <Route
-          path="/analysis"
+          path="/time-management"
           element={
             <PrivateRoute>
-              <TimeAnalysis />
+              <TimeManagement />
             </PrivateRoute>
           }
         />
@@ -231,14 +273,6 @@ function MainApp() {
             </PrivateRoute>
           }
         />
-				<Route
-          path="/reset-password"
-          element={
-            <PrivateRoute>
-              <ResetPasswordModal />
-            </PrivateRoute>
-          }
-        />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -254,9 +288,6 @@ function MainApp() {
           }}
         />
       )}
-      
-      {/* Supabase Debug Component (only in development) */}
-      {import.meta.env.DEV && <SupabaseDebug />}
     </>
   );
 }

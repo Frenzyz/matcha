@@ -234,10 +234,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const forgotPassword = async (email: string) => {
     try {
+      if (!email || typeof email !== 'string') {
+        throw new Error('Valid email is required');
+      }
+      
+      logger.info('Sending password reset email to:', email);
+      
+      // Create correct redirect URL based on environment
+      const isLocalhost = window.location.hostname === 'localhost';
+      const protocol = isLocalhost ? 'http' : 'https';
+      const redirectTo = `${protocol}://${window.location.host}/reset-password`;
+      
+      logger.info('Using redirect URL:', redirectTo);
+      
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`
+        redirectTo: redirectTo
       });
-      if (error) throw error;
+      
+      if (error) {
+        logger.error('Forgot password error:', error);
+        throw error;
+      }
+      
+      logger.info('Password reset email sent successfully');
     } catch (error) {
       logger.error('Forgot password error:', error);
       throw new Error(error instanceof Error ? error.message : 'Failed to send reset link');
@@ -246,13 +265,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const resetPassword = async (newPassword: string, token: string) => {
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword,
-        data: {
-          token: token
-        }
+      console.log('Attempting to reset password with recovery token');
+      
+      if (!newPassword || typeof newPassword !== 'string') {
+        throw new Error('New password is required');
+      }
+      
+      if (!token || typeof token !== 'string') {
+        throw new Error('Valid token is required');
+      }
+      
+      // For password resets via recovery tokens, we need to use a different approach
+      // than normal password updates
+      
+      const { data, error } = await supabase.auth.exchangeCodeForSession(token);
+      
+      if (error) {
+        logger.error('Error exchanging recovery token for session:', error);
+        throw error;
+      }
+      
+      if (!data.session) {
+        throw new Error('Failed to establish session with recovery token');
+      }
+      
+      // Now update password with the active session
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: newPassword
       });
-      if (error) throw error;
+      
+      if (updateError) {
+        logger.error('Error updating password:', updateError);
+        throw updateError;
+      }
+      
+      logger.info('Password reset successful');
+      
+      // Update local state with the session
+      if (data.user && data.session) {
+        setUser(data.user);
+        setSession(data.session);
+      }
+      
+      // Don't return anything - function should be void
     } catch (error) {
       logger.error('Reset password error:', error);
       throw new Error(error instanceof Error ? error.message : 'Failed to reset password');

@@ -110,34 +110,86 @@ export default function Budgeting() {
       setError(null);
       logger.info("Fetching budget data for user:", user.id);
 
-      // Use .single() so that we get one row (create one if not exists via a separate process)
+      // First, try to get existing budget data (don't use .single() to avoid errors)
       const { data, error } = await supabase
         .from("user_budgets")
         .select("*")
         .eq("user_id", user.id)
-        .single();
+        .limit(1);
 
       if (error) throw error;
-      logger.info("Fetched budget data:", data);
 
-      if (data) {
-        setMonthlyBudget(data.monthly_budget ?? 1000);
-        setRolloverAmount(data.rollover_amount ?? 0);
-        setTransactions(data.transactions ? JSON.parse(JSON.stringify(data.transactions)) : []);
-        setCashBalance(Number(data.cash_balance ?? 0));
-        setStocksBalance(Number(data.stocks_balance ?? 0));
-        setTotalBalance(Number(data.total_balance ?? 0));
+      if (data && data.length > 0) {
+        // User has existing budget data
+        const budgetData = data[0];
+        logger.info("Fetched existing budget data:", budgetData);
+
+        setMonthlyBudget(budgetData.monthly_budget ?? 1000);
+        setRolloverAmount(budgetData.rollover_amount ?? 0);
+        setTransactions(budgetData.transactions ? JSON.parse(JSON.stringify(budgetData.transactions)) : []);
+        setCashBalance(Number(budgetData.cash_balance ?? 0));
+        setStocksBalance(Number(budgetData.stocks_balance ?? 0));
+        setTotalBalance(Number(budgetData.total_balance ?? 0));
         setBalanceHistory(
-          data.balance_history ? JSON.parse(JSON.stringify(data.balance_history)) : []
+          budgetData.balance_history ? JSON.parse(JSON.stringify(budgetData.balance_history)) : []
         );
         setCustomBudgets(
-          data.custom_budgets ? JSON.parse(JSON.stringify(data.custom_budgets)) : []
+          budgetData.custom_budgets ? JSON.parse(JSON.stringify(budgetData.custom_budgets)) : []
         );
+      } else {
+        // No budget data exists yet - create initial/default values
+        logger.info("No budget data found, creating default budget for new user");
+        
+        // Set default values
+        setMonthlyBudget(1000);
+        setRolloverAmount(0);
+        setTransactions([]);
+        setCashBalance(0);
+        setStocksBalance(0);
+        setTotalBalance(0);
+        setBalanceHistory([]);
+        setCustomBudgets([]);
+
+        // Create initial budget record in database
+        const initialBudget = {
+          user_id: user.id,
+          monthly_budget: 1000,
+          rollover_amount: 0,
+          transactions: [],
+          custom_budgets: [],
+          cash_balance: 0,
+          stocks_balance: 0,
+          total_balance: 0,
+          balance_history: [],
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+
+        const { error: insertError } = await supabase
+          .from("user_budgets")
+          .insert([initialBudget]);
+
+        if (insertError) {
+          logger.error("Error creating initial budget:", insertError);
+          // Don't throw error here - user can still use the app with default values
+        } else {
+          logger.info("Successfully created initial budget record");
+        }
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to load budget data";
       setError(message);
       logger.error("Error fetching budget data:", err);
+      
+      // Set default values even if there's an error, so the app doesn't break
+      setMonthlyBudget(1000);
+      setRolloverAmount(0);
+      setTransactions([]);
+      setCashBalance(0);
+      setStocksBalance(0);
+      setTotalBalance(0);
+      setBalanceHistory([]);
+      setCustomBudgets([]);
     } finally {
       setLoading(false);
     }
