@@ -6,8 +6,20 @@ export class LLMService {
   private model: string = 'llama3-8b-8192';
 
   constructor() {
+    // SECURITY WARNING: This exposes the API key on the client-side
+    // In production, this should be proxied through a server-side API
+    const apiKey = import.meta.env.VITE_GROQ_API_KEY;
+    
+    if (import.meta.env.PROD && apiKey) {
+      console.warn('SECURITY WARNING: API key is exposed on client-side in production build. This should be proxied through a server-side API.');
+    }
+    
+    if (!apiKey) {
+      throw new Error('VITE_GROQ_API_KEY environment variable is required');
+    }
+    
     this.groq = new Groq({
-      apiKey: import.meta.env.VITE_GROQ_API_KEY,
+      apiKey: apiKey,
       dangerouslyAllowBrowser: true
     });
   }
