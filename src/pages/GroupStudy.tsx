@@ -114,6 +114,19 @@ export default function GroupStudy() {
     // The selected room and media preferences will be handled by the StudyRoom component
   };
 
+  const handleRoomDeleted = (roomId: string) => {
+    // Remove the deleted room from local state
+    setRooms(prevRooms => prevRooms.filter(room => room.id !== roomId));
+    
+    // If the deleted room was selected, close it
+    if (selectedRoom === roomId) {
+      setSelectedRoom(null);
+      setShowJoinModal(false);
+    }
+    
+    logger.info('Room removed from list:', roomId);
+  };
+
   if (!groupStudyEnabled) {
     return null;
   }
@@ -148,6 +161,7 @@ export default function GroupStudy() {
           rooms={rooms}
           loading={loading}
           onJoinRoom={handleJoinRoom}
+          onRoomDeleted={handleRoomDeleted}
         />
 
         {showCreateModal && (

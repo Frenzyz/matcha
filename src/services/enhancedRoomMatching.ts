@@ -594,6 +594,103 @@ export class EnhancedRoomMatchingService {
       // Don't throw - notification creation shouldn't break the main operation
     }
   }
+
+  /**
+   * Check if current user can delete a specific room
+   */
+  async canDeleteRoom(roomId: string): Promise<boolean> {
+    try {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) return false;
+
+      const { data, error } = await supabase
+        .rpc('can_delete_room', {
+          room_id: roomId,
+          user_id: user.user.id
+        });
+
+      if (error) throw error;
+      return data || false;
+    } catch (error) {
+      logger.error('Error checking delete permissions:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Delete a study room (creator or admin only)
+   */
+  async deleteRoom(roomId: string): Promise<boolean> {
+    try {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) throw new Error('User not authenticated');
+
+      // First check permissions
+      const canDelete = await this.canDeleteRoom(roomId);
+      if (!canDelete) {
+        throw new Error('Insufficient permissions to delete this room');
+      }
+
+      const { data, error } = await supabase
+        .rpc('delete_study_room', {
+          room_id: roomId
+        });
+
+      if (error) throw error;
+
+      logger.info('Study room deleted:', { roomId, userId: user.user.id });
+      return data || false;
+    } catch (error) {
+      logger.error('Error deleting room:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get current user's admin status
+   */
+  async isUserAdmin(): Promise<boolean> {
+    try {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) return false;
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('is_admin')
+        .eq('id', user.user.id)
+        .single();
+
+      if (error) throw error;
+      return data?.is_admin || false;
+    } catch (error) {
+      logger.error('Error checking admin status:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get room deletion history (admin only)
+   */
+  async getRoomDeletionHistory(limit: number = 50): Promise<any[]> {
+    try {
+      const { data, error } = await supabase
+        .from('room_deletion_log')
+        .select(`
+          *,
+          deleter:deleted_by (
+            first_name, last_name, email
+          )
+        `)
+        .order('deleted_at', { ascending: false })
+        .limit(limit);
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      logger.error('Error fetching deletion history:', error);
+      throw error;
+    }
+  }
 }
 
 export const enhancedRoomMatchingService = EnhancedRoomMatchingService.getInstance();
