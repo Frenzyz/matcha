@@ -36,8 +36,8 @@ export default function ChatRoom({ roomId, userId }: ChatRoomProps) {
 
   // Setup socket connection
   useEffect(() => {
-    const socketUrl = import.meta.env.DEV ? 'http://localhost:3001' : window.location.origin;
-    socketRef.current = io(socketUrl, {
+    const webrtcServerUrl = import.meta.env.VITE_WEBRTC_SERVER_URL || 'http://localhost:3001';
+    socketRef.current = io(webrtcServerUrl, {
       transports: ['websocket', 'polling'],
       timeout: 20000
     });

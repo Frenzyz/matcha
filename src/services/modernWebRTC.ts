@@ -33,9 +33,9 @@ export class ModernWebRTCService {
 
   private initializeSocket() {
     try {
-      // Connect to local dev server or production server
-      const socketUrl = import.meta.env.DEV ? 'http://localhost:3001' : window.location.origin;
-      this.socket = io(socketUrl, {
+      // Connect to WebRTC server using environment variable
+      const webrtcServerUrl = import.meta.env.VITE_WEBRTC_SERVER_URL || 'http://localhost:3001';
+      this.socket = io(webrtcServerUrl, {
         transports: ['websocket', 'polling'],
         timeout: 20000,
         forceNew: true

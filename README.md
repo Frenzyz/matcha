@@ -36,12 +36,18 @@ An AI-powered academic assistant designed specifically for UNCC students, helpin
    ```
 
 3. **Environment Setup**
-   Create a `.env` file in the root directory with:
+   Copy `env.example.txt` to `.env` and fill in your values:
+   ```bash
+   cp env.example.txt .env
    ```
-   VITE_SUPABASE_URL=your_supabase_url
-   VITE_SUPABASE_ANON_KEY=your_supabase_key
-   VITE_GOOGLE_CLIENT_ID=your_google_client_id
+   
+   Required environment variables:
+   ```
+   VITE_SUPABASE_URL=https://your-project.supabase.co
+   VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+   VITE_GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.com
    VITE_GROQ_API_KEY=your_groq_api_key
+   VITE_WEBRTC_SERVER_URL=http://localhost:3001
    ```
 
 4. **Development**
@@ -57,6 +63,57 @@ An AI-powered academic assistant designed specifically for UNCC students, helpin
    ```bash
    npm run build
    ```
+
+## 🚀 Deployment
+
+### Frontend Deployment (Netlify/Vercel/GitHub Pages)
+
+The frontend can be deployed to any static hosting service:
+
+1. **Build the project**:
+   ```bash
+   npm run build
+   ```
+
+2. **Deploy the `dist` folder** to your hosting service
+
+3. **Set environment variables** in your hosting service dashboard:
+   ```
+   VITE_SUPABASE_URL=your_supabase_url
+   VITE_SUPABASE_ANON_KEY=your_supabase_key  
+   VITE_GOOGLE_CLIENT_ID=your_google_client_id
+   VITE_GROQ_API_KEY=your_groq_api_key
+   VITE_WEBRTC_SERVER_URL=https://your-webrtc-server.com
+   ```
+
+### WebRTC Server Deployment (Required for Group Study Features)
+
+The WebRTC signaling server must be deployed separately. **Multiple FREE options available!**
+
+#### 🆓 **FREE Options (Recommended):**
+
+1. **Render.com (FREE)** - No credit card required
+2. **Fly.io (FREE)** - Better performance, requires credit card but won't charge
+3. **Oracle Cloud (FREE)** - Always free tier with generous limits
+4. **Self-hosted Docker** - Complete control, any VPS or local server
+
+#### 💰 **Cheap Self-Hosted ($2-5/month):**
+
+1. **Contabo, Hetzner, DigitalOcean** - Ultra-cheap VPS providers
+2. **Docker deployment** on any server
+
+#### 📖 **Complete Setup Guide:**
+
+See **[FREE-DEPLOYMENT-GUIDE.md](FREE-DEPLOYMENT-GUIDE.md)** for detailed step-by-step instructions for all free and self-hosted options.
+
+### Complete Deployment Checklist
+
+- [ ] Deploy WebRTC server using **FREE option** (Render.com/Fly.io/Docker/VPS)
+- [ ] Get WebRTC server URL (e.g., `https://matcha-webrtc.onrender.com`)
+- [ ] Set `VITE_WEBRTC_SERVER_URL` in Netlify environment variables
+- [ ] Deploy frontend to Netlify with all environment variables
+- [ ] Test group study features in production
+- [ ] Verify real-time chat and video calls work across different devices
 
 ## 🛠️ Technology Stack
 

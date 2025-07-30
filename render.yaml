@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: matcha-webrtc
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node webrtc-server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        sync: false
+        value: 10000
+      - key: FRONTEND_URL
+        sync: false
+        # You'll set this to your Netlify URL after frontend deployment
