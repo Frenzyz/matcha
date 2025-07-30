@@ -13,7 +13,8 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
       process.env.FRONTEND_URL,
       // Add your production frontend URLs here
       'https://matcha-study.netlify.app',
-      'https://your-frontend.vercel.app'
+      'https://your-frontend.vercel.app',
+      'https://astounding-kataifi-cc69b0.netlify.app' // Add your actual Netlify URL here
     ].filter(Boolean)
   : [
       "http://localhost:5173", 
