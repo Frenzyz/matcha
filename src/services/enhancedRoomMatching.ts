@@ -605,8 +605,8 @@ export class EnhancedRoomMatchingService {
 
       const { data, error } = await supabase
         .rpc('can_delete_room', {
-          room_id: roomId,
-          user_id: user.user.id
+          p_room_id: roomId,
+          p_user_id: user.user.id
         });
 
       if (error) throw error;
@@ -633,7 +633,7 @@ export class EnhancedRoomMatchingService {
 
       const { data, error } = await supabase
         .rpc('delete_study_room', {
-          room_id: roomId
+          p_room_id: roomId
         });
 
       if (error) throw error;
