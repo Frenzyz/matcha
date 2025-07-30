@@ -23,6 +23,10 @@ export default function VideoCall({ roomId, participants }: VideoCallProps) {
   const [isJoiningRoom, setIsJoiningRoom] = useState(false);
   const [hasRequestedMedia, setHasRequestedMedia] = useState(false);
   const [remoteParticipants, setRemoteParticipants] = useState<ParticipantStream[]>([]);
+  const [connectionState, setConnectionState] = useState<RTCPeerConnectionState>('new');
+  const [networkQuality, setNetworkQuality] = useState<'excellent' | 'good' | 'poor' | 'unknown'>('unknown');
+  const [retryCount, setRetryCount] = useState(0);
+  const [connectionStatus, setConnectionStatus] = useState<string>('Ready to connect');
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const screenVideoRef = useRef<HTMLVideoElement>(null);
   const recorderRef = useRef<RecordRTC | null>(null);
@@ -77,47 +81,75 @@ export default function VideoCall({ roomId, participants }: VideoCallProps) {
     };
   }, [roomId, user]); // Removed hasRequestedMedia, localStream, screenStream from dependencies
 
+  // Monitor connection status
+  useEffect(() => {
+    if (!isInitialized) return;
+
+    const statusInterval = setInterval(() => {
+      const state = webRTCService.getConnectionState();
+      const quality = webRTCService.getNetworkQuality();
+      const retries = webRTCService.getConnectionRetryCount();
+
+      setConnectionState(state);
+      setNetworkQuality(quality);
+      setRetryCount(retries);
+
+      // Update connection status message
+      let status = 'Connected';
+      if (state === 'connecting') {
+        status = retries > 0 ? `Reconnecting... (attempt ${retries + 1})` : 'Connecting...';
+      } else if (state === 'disconnected') {
+        status = 'Disconnected - attempting to reconnect...';
+      } else if (state === 'failed') {
+        status = 'Connection failed';
+      } else if (state === 'connected') {
+        switch (quality) {
+          case 'excellent':
+            status = 'Connected - Excellent quality';
+            break;
+          case 'good':
+            status = 'Connected - Good quality';
+            break;
+          case 'poor':
+            status = 'Connected - Poor quality';
+            break;
+          default:
+            status = 'Connected';
+        }
+      }
+
+      setConnectionStatus(status);
+    }, 1000);
+
+    return () => clearInterval(statusInterval);
+  }, [isInitialized]);
+
   const joinVideoRoom = async () => {
     if (!user || isInitialized || isJoiningRoom) return;
 
     try {
       setIsJoiningRoom(true);
       setError(null);
+      setConnectionStatus('Connecting...');
       logger.info('Joining video room...');
 
-      // Initialize WebRTC service with retries
-      let success = false;
-      let attempts = 0;
-      const maxAttempts = 3;
-
-      while (!success && attempts < maxAttempts) {
-        attempts++;
-        try {
-          success = await Promise.race([
-            webRTCService.initialize({
-              roomId,
-              userId: user.id,
-              userName: user.email || 'Anonymous'
-            }),
-            new Promise<boolean>((_, reject) => 
-              setTimeout(() => reject(new Error('Connection timeout')), 5000)
-            )
-          ]);
-        } catch (attemptError) {
-          logger.warn(`WebRTC init attempt ${attempts} failed:`, attemptError);
-          if (attempts === maxAttempts) throw attemptError;
-          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
-        }
-      }
+      // Initialize WebRTC service (now with built-in robust retry logic)
+      const success = await webRTCService.initialize({
+        roomId,
+        userId: user.id,
+        userName: user.email || 'Anonymous'
+      });
 
       if (!success) {
-        throw new Error('Failed to initialize WebRTC service after multiple attempts');
+        throw new Error('Failed to initialize WebRTC service');
       }
 
-      // Start local stream
+      setConnectionStatus('Acquiring media...');
+
+      // Start local stream (now with adaptive quality and fallback)
       const stream = await webRTCService.startLocalStream(videoEnabled, audioEnabled);
       if (!stream) {
-        throw new Error('Failed to access camera/microphone. Please check permissions.');
+        throw new Error('Failed to access camera/microphone. Please check permissions and try again.');
       }
 
       setLocalStream(stream);
@@ -134,12 +166,14 @@ export default function VideoCall({ roomId, participants }: VideoCallProps) {
       }
 
       setIsInitialized(true);
+      setConnectionStatus('Connected successfully');
       logger.info('Successfully joined video room');
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to join video room';
       logger.error('Video room join error:', err);
       setError(errorMessage);
+      setConnectionStatus('Connection failed');
     } finally {
       setIsJoiningRoom(false);
     }
@@ -287,12 +321,17 @@ export default function VideoCall({ roomId, participants }: VideoCallProps) {
             </div>
           )}
           
-          {/* Loading state */}
+          {/* Loading/Connection state */}
           {isJoiningRoom && (
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="text-center text-white">
                 <Users size={48} className="mx-auto mb-2 opacity-50 animate-pulse" />
-                <p className="text-sm">Connecting to video call...</p>
+                <p className="text-sm font-medium">{connectionStatus}</p>
+                {retryCount > 0 && (
+                  <p className="text-xs text-yellow-400 mt-1">
+                    Retry attempt {retryCount}/5
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -405,9 +444,28 @@ export default function VideoCall({ roomId, participants }: VideoCallProps) {
         )}
       </div>
 
+      {/* Connection Status - show when active */}
+      {isInitialized && (
+        <div className="flex justify-center items-center gap-2 mt-2 mb-2">
+          <div className={`w-2 h-2 rounded-full ${
+            connectionState === 'connected' ? 'bg-emerald-500' : 
+            connectionState === 'connecting' ? 'bg-yellow-500 animate-pulse' :
+            'bg-red-500'
+          }`} />
+          <span className={`text-xs font-medium ${
+            networkQuality === 'excellent' ? 'text-emerald-400' :
+            networkQuality === 'good' ? 'text-yellow-400' :
+            networkQuality === 'poor' ? 'text-orange-400' :
+            'text-gray-400'
+          }`}>
+            {connectionStatus}
+          </span>
+        </div>
+      )}
+
       {/* Controls - only show when video call is active */}
       {isInitialized && (
-        <div className="flex justify-center gap-4 mt-4">
+        <div className="flex justify-center gap-4 mt-2">
           <button
             onClick={toggleScreenShare}
             className={`p-2 rounded-full ${
