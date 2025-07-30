@@ -96,11 +96,16 @@ io.on('connection', (socket) => {
     const { roomId, userId, message, timestamp } = data;
     console.log(`Message in room ${roomId} from ${userId}: ${message}`);
     
+    // Get userName from room participants
+    const roomParticipants = rooms.get(roomId);
+    const userName = roomParticipants?.get(userId)?.userName || `User ${userId.slice(0, 8)}`;
+    
     // Broadcast message to ALL users in the room (including sender)
     io.to(roomId).emit('room-message', {
       userId,
       message,
-      timestamp
+      timestamp,
+      userName
     });
   });
 

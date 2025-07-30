@@ -1,5 +1,7 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { User } from 'lucide-react';
+import { supabase } from '../../../config/supabase';
+import { logger } from '../../../utils/logger';
 
 interface RemoteVideoProps {
   participantId: string;
@@ -8,6 +10,30 @@ interface RemoteVideoProps {
 
 export default function RemoteVideo({ participantId, stream }: RemoteVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [participantName, setParticipantName] = useState<string>(`Participant ${participantId.slice(0, 8)}`);
+
+  // Fetch participant name
+  useEffect(() => {
+    const fetchParticipantName = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('first_name, last_name')
+          .eq('id', participantId)
+          .single();
+
+        if (error) throw error;
+
+        const fullName = `${data.first_name} ${data.last_name}`.trim();
+        setParticipantName(fullName || `User ${participantId.slice(0, 8)}`);
+      } catch (error) {
+        logger.error('Error fetching participant name:', error);
+        setParticipantName(`User ${participantId.slice(0, 8)}`);
+      }
+    };
+
+    fetchParticipantName();
+  }, [participantId]);
 
   useEffect(() => {
     const videoElement = videoRef.current;
@@ -57,7 +83,7 @@ export default function RemoteVideo({ participantId, stream }: RemoteVideoProps)
       
       <div className="absolute bottom-4 left-4">
         <span className="bg-black/50 text-white px-2 py-1 rounded text-sm">
-          Participant {participantId.slice(0, 8)}
+          {participantName}
         </span>
       </div>
     </div>

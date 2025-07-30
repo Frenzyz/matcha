@@ -26,6 +26,7 @@ export default function ChatRoom({ roomId, userId }: ChatRoomProps) {
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [newMessage, setNewMessage] = useState('');
+  const [userNames, setUserNames] = useState<{ [userId: string]: string }>({});
   const socketRef = useRef<Socket>();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -33,6 +34,32 @@ export default function ChatRoom({ roomId, userId }: ChatRoomProps) {
   useEffect(() => {
     loadPreviousMessages();
   }, [roomId]);
+
+  // Function to fetch user name
+  const fetchUserName = async (userId: string): Promise<string> => {
+    if (userNames[userId]) {
+      return userNames[userId];
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('first_name, last_name')
+        .eq('id', userId)
+        .single();
+
+      if (error) throw error;
+
+      const fullName = `${data.first_name} ${data.last_name}`.trim();
+      setUserNames(prev => ({ ...prev, [userId]: fullName }));
+      return fullName;
+    } catch (error) {
+      logger.error('Error fetching user name:', error);
+      const fallbackName = `User ${userId.slice(0, 8)}`;
+      setUserNames(prev => ({ ...prev, [userId]: fallbackName }));
+      return fallbackName;
+    }
+  };
 
   // Setup socket connection
   useEffect(() => {
@@ -42,20 +69,30 @@ export default function ChatRoom({ roomId, userId }: ChatRoomProps) {
       timeout: 20000
     });
 
-    socketRef.current.on('connect', () => {
+    socketRef.current.on('connect', async () => {
       setConnected(true);
       setError(null);
       logger.info('Chat connected to WebRTC server');
-      socketRef.current?.emit('join-room', { roomId, userId, userName: 'User' });
+      // Get current user's name for joining room
+      const currentUserName = await fetchUserName(userId);
+      socketRef.current?.emit('join-room', { roomId, userId, userName: currentUserName });
     });
 
-    socketRef.current.on('room-message', (data: { userId: string; message: string; timestamp: number }) => {
+    socketRef.current.on('room-message', async (data: { userId: string; message: string; timestamp: number; userName?: string }) => {
+      // Use userName from server, fallback to fetching if not provided
+      let userName = data.userName;
+      if (!userName) {
+        userName = data.userId === userId ? 'You' : await fetchUserName(data.userId);
+      } else if (data.userId === userId) {
+        userName = 'You';
+      }
+      
       const newMessage: Message = {
         id: `${data.timestamp}-${data.userId}`,
         content: data.message,
         senderId: data.userId,
         timestamp: new Date(data.timestamp).toISOString(),
-        userName: data.userId === userId ? 'You' : 'User'
+        userName: userName
       };
       
       setMessages(prev => {
@@ -94,16 +131,27 @@ export default function ChatRoom({ roomId, userId }: ChatRoomProps) {
       if (error) throw error;
 
       if (data) {
-        const formattedMessages: Message[] = data.map((msg: any) => ({
-          id: msg.id,
-          content: msg.content,
-          senderId: msg.user_id,
-          timestamp: msg.created_at,
-          userName: msg.user_name || 'User',
-          avatarUrl: msg.avatar_url
-        })).reverse(); // Reverse to show oldest first
+        const formattedMessages: Message[] = await Promise.all(
+          data.map(async (msg: any) => {
+            let userName = msg.user_name;
+            
+            // If no user name from DB, fetch it
+            if (!userName || userName === 'User') {
+              userName = msg.user_id === userId ? 'You' : await fetchUserName(msg.user_id);
+            }
+            
+            return {
+              id: msg.id,
+              content: msg.content,
+              senderId: msg.user_id,
+              timestamp: msg.created_at,
+              userName: userName,
+              avatarUrl: msg.avatar_url
+            };
+          })
+        );
 
-        setMessages(formattedMessages);
+        setMessages(formattedMessages.reverse()); // Reverse to show oldest first
       }
     } catch (err) {
       logger.error('Failed to load previous messages:', err);
@@ -209,7 +257,7 @@ export default function ChatRoom({ roomId, userId }: ChatRoomProps) {
               content={message.content}
               timestamp={message.timestamp}
               isCurrentUser={message.senderId === userId}
-              senderName={message.senderId !== userId ? `User ${message.senderId.slice(0, 8)}` : undefined}
+              senderName={message.senderId !== userId ? message.userName : undefined}
             />
           ))
         )}
