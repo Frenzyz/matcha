@@ -24,7 +24,10 @@ export function useMediaStream() {
         audio: audio ? {
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: true
+          autoGainControl: true,
+          channelCount: 2,
+          sampleRate: 48000,
+          sampleSize: 16
         } : false
       };
 

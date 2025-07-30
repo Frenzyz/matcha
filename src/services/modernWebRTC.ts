@@ -25,10 +25,13 @@ export class ModernWebRTCService {
   private onParticipantJoinedCallback?: (userId: string, userName: string) => void;
   private onParticipantLeftCallback?: (userId: string) => void;
   private config: WebRTCConfig | null = null;
+  private isDestroyed: boolean = false;
+  private visibilityChangeHandler?: () => void;
 
   constructor() {
     // Initialize socket connection
     this.initializeSocket();
+    this.setupVisibilityHandler();
   }
 
   private initializeSocket() {
@@ -38,15 +41,37 @@ export class ModernWebRTCService {
       this.socket = io(webrtcServerUrl, {
         transports: ['websocket', 'polling'],
         timeout: 20000,
-        forceNew: true
+        forceNew: true,
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        maxReconnectionAttempts: 5
       });
 
       this.socket.on('connect', () => {
         logger.info('Socket connected for WebRTC');
+        // Rejoin room if we were previously connected
+        if (this.config) {
+          logger.info('Rejoining room after reconnection');
+          this.joinRoom();
+        }
       });
 
-      this.socket.on('disconnect', () => {
-        logger.info('Socket disconnected');
+      this.socket.on('disconnect', (reason) => {
+        logger.info('Socket disconnected:', reason);
+        // Don't trigger disconnect events for tab visibility changes
+        if (reason !== 'io client disconnect' && reason !== 'transport close') {
+          logger.info('Socket disconnected due to network issue, will attempt to reconnect');
+        }
+      });
+
+      this.socket.on('reconnect', (attemptNumber) => {
+        logger.info(`Socket reconnected after ${attemptNumber} attempts`);
+      });
+
+      this.socket.on('reconnect_error', (error) => {
+        logger.error('Socket reconnection error:', error);
       });
 
       this.socket.on('connect_error', (error) => {
@@ -140,7 +165,10 @@ export class ModernWebRTCService {
         audio: audio ? {
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: true
+          autoGainControl: true,
+          channelCount: 2,
+          sampleRate: 48000,
+          sampleSize: 16
         } : false
       });
 
@@ -321,7 +349,44 @@ export class ModernWebRTCService {
     this.peer = null;
   }
 
+  private setupVisibilityHandler() {
+    // Prevent disconnection when tab becomes hidden
+    this.visibilityChangeHandler = () => {
+      if (document.visibilityState === 'hidden') {
+        logger.info('Tab became hidden - maintaining WebRTC connection');
+        // Keep connection alive, don't disconnect
+      } else if (document.visibilityState === 'visible') {
+        logger.info('Tab became visible - WebRTC connection active');
+        // Reconnect if disconnected while hidden
+        if (this.config && this.socket && !this.socket.connected) {
+          logger.info('Reconnecting socket after tab became visible');
+          this.socket.connect();
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', this.visibilityChangeHandler);
+
+    // Handle page unload to properly cleanup
+    const beforeUnloadHandler = () => {
+      if (!this.isDestroyed) {
+        logger.info('Page unloading - cleaning up WebRTC');
+        this.leaveRoom();
+      }
+    };
+    
+    window.addEventListener('beforeunload', beforeUnloadHandler);
+  }
+
   destroy() {
+    this.isDestroyed = true;
+    
+    // Remove visibility change handler
+    if (this.visibilityChangeHandler) {
+      document.removeEventListener('visibilitychange', this.visibilityChangeHandler);
+      this.visibilityChangeHandler = undefined;
+    }
+    
     this.leaveRoom();
     this.socket?.disconnect();
     this.socket = null;

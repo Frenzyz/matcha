@@ -60,7 +60,9 @@ export default function VideoCall({ roomId, participants }: VideoCallProps) {
     setupWebRTCService();
 
     return () => {
+      // Only cleanup when component unmounts or roomId/user changes, not on tab switching
       if (hasRequestedMedia) {
+        logger.info('VideoCall cleanup triggered');
         webRTCService.leaveRoom();
         if (localStream) {
           localStream.getTracks().forEach(track => track.stop());
@@ -73,7 +75,7 @@ export default function VideoCall({ roomId, participants }: VideoCallProps) {
         }
       }
     };
-  }, [roomId, user, hasRequestedMedia, localStream, screenStream]);
+  }, [roomId, user]); // Removed hasRequestedMedia, localStream, screenStream from dependencies
 
   const joinVideoRoom = async () => {
     if (!user || isInitialized || isJoiningRoom) return;
