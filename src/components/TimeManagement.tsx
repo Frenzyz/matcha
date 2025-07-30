@@ -392,11 +392,7 @@ export default function TimeManagement() {
            await updateEvent(updatedEvent);
            console.log('Event update completed successfully');
            
-           // Force a re-fetch to ensure UI is updated
-           setTimeout(() => {
-             console.log('Triggering data refresh');
-             fetchData(startDate, endDate);
-           }, 200);
+                     // Real-time updates will handle UI refresh automatically
          } catch (error) {
            console.error('Event update failed:', error);
          }

@@ -51,21 +51,39 @@ export default function StudyRoom({ roomId, onLeave }: StudyRoomProps) {
 
   const subscribeToRoomUpdates = () => {
     const channel = supabase
-      .channel(`study_rooms_channel`)
+      .channel(`study_room_${roomId}`)
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'UPDATE',
           schema: 'public',
-          table: 'study_rooms'
+          table: 'study_rooms',
+          filter: `id=eq.${roomId}`
         },
-        async (payload) => {
-          await loadRoom();
+        (payload) => {
+          logger.info('Current room updated:', payload.new);
+          if (payload.new) {
+            setRoom(payload.new as StudyRoomType);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'study_rooms',
+          filter: `id=eq.${roomId}`
+        },
+        (payload) => {
+          logger.info('Current room deleted:', payload.old);
+          setError('This room has been deleted');
+          onLeave();
         }
       )
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          logger.info('Subscribed to room updates');
+          logger.info('Subscribed to current room updates');
         }
       });
 

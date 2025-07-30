@@ -61,12 +61,47 @@ export default function GroupStudy() {
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'INSERT',
+          schema: 'public',
+          table: 'study_rooms',
+          filter: 'status=eq.active'
+        },
+        (payload) => {
+          logger.info('New room created:', payload.new);
+          if (payload.new) {
+            setRooms(prev => [payload.new as StudyRoomType, ...prev]);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'study_rooms',
+          filter: 'status=eq.active'
+        },
+        (payload) => {
+          logger.info('Room updated:', payload.new);
+          if (payload.new) {
+            setRooms(prev => prev.map(room => 
+              room.id === payload.new.id ? payload.new as StudyRoomType : room
+            ));
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
           schema: 'public',
           table: 'study_rooms'
         },
-        async () => {
-          await loadRooms();
+        (payload) => {
+          logger.info('Room deleted:', payload.old);
+          if (payload.old) {
+            setRooms(prev => prev.filter(room => room.id !== payload.old.id));
+          }
         }
       )
       .subscribe((status) => {
