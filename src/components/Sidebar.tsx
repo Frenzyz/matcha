@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Calendar, Settings, GraduationCap, Users, Wallet, Clock } from 'lucide-react';
+import { Calendar, Settings, GraduationCap, Users, Wallet, Clock, Search, UserPlus } from 'lucide-react';
 import { useThemeStore } from '../store/themeStore';
 import { useFeatureStore } from '../store/featureStore';
 
@@ -20,6 +20,16 @@ export default function Sidebar({ isOpen }: SidebarProps) {
       icon: Users, 
       label: 'Group Study (Beta)', 
       path: '/group-study' 
+    }] : []),
+    ...(groupStudyEnabled ? [{ 
+      icon: Search, 
+      label: 'Find Study Partners', 
+      path: '/discover-partners' 
+    }] : []),
+    ...(groupStudyEnabled ? [{ 
+      icon: UserPlus, 
+      label: 'Friends', 
+      path: '/friends' 
     }] : []),
     { icon: GraduationCap, label: 'Scholarships', path: '/scholarships' },
     { icon: Wallet, label: 'Matcha Wallet', path: '/budgeting' },

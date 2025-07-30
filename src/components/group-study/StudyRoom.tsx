@@ -35,10 +35,7 @@ export default function StudyRoom({ roomId, onLeave }: StudyRoomProps) {
     try {
       const { data, error } = await supabase
         .from('study_rooms')
-        .select(`
-          *,
-          participant_count
-        `)
+        .select('*')
         .eq('id', roomId)
         .single();
 

@@ -8,6 +8,9 @@ An AI-powered academic assistant designed specifically for UNCC students, helpin
 
 - **AI-Powered Academic Assistant** - Get personalized guidance and support for your academic journey
 - **Smart Calendar Integration** - Sync with Google Calendar and manage your schedule efficiently
+- **Group Study Spaces** - Create and join virtual study rooms with real-time chat and video calls
+- **User Discovery** - Find study partners based on shared interests and courses
+- **Friend System** - Add friends, send messages, and organize study sessions
 - **Task Management** - Track assignments, deadlines, and events with smart reminders
 - **Virtual Parent Mode** - Get caring advice with a touch of dad jokes and puns
 - **Time Analysis** - Visualize and optimize your time management
@@ -18,8 +21,8 @@ An AI-powered academic assistant designed specifically for UNCC students, helpin
 
 1. **Prerequisites**
    ```bash
-   node >= 18.0.0
-   npm >= 9.0.0
+   node >= 20.0.0
+   npm >= 10.0.0
    ```
 
 2. **Installation**
@@ -43,7 +46,11 @@ An AI-powered academic assistant designed specifically for UNCC students, helpin
 
 4. **Development**
    ```bash
+   # Start frontend only
    npm run dev
+   
+   # Start both frontend and WebRTC server (for group study features)
+   npm run dev:full
    ```
 
 5. **Build**
@@ -63,6 +70,13 @@ An AI-powered academic assistant designed specifically for UNCC students, helpin
 - **Backend & Database**
   - Supabase
   - PostgreSQL
+  - Socket.io (Real-time messaging)
+  - Express.js (WebRTC signaling server)
+
+- **Real-time Communication**
+  - PeerJS (WebRTC for video calls)
+  - Socket.io (Real-time chat)
+  - WebRTC (Peer-to-peer communication)
 
 - **AI/ML**
   - Groq API
@@ -85,6 +99,13 @@ An AI-powered academic assistant designed specifically for UNCC students, helpin
   - Virtual parent mode
   - Personalized recommendations
   - Study tips
+
+- **Group Study Framework**
+  - Virtual study rooms with video calls
+  - Real-time chat with message persistence
+  - User discovery and friend system
+  - Profile visibility settings
+  - Smart study partner matching
 
 - **Scholarship Management**
   - Scholarship discovery

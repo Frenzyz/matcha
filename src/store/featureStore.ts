@@ -14,9 +14,9 @@ interface FeatureState {
 export const useFeatureStore = create<FeatureState>()(
   persist(
     (set, get) => ({
-      groupStudyEnabled: false,
+      groupStudyEnabled: true,
       betaFeatures: {
-        groupStudy: false,
+        groupStudy: true,
       },
       toggleGroupStudy: async () => {
         const newValue = !get().groupStudyEnabled;

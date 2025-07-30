@@ -4,12 +4,15 @@ import ChatMessage from './ChatMessage';
 import ChatInput from './ChatInput';
 import { Loader2 } from 'lucide-react';
 import { logger } from '../../../utils/logger';
+import { supabase } from '../../../config/supabase';
 
 interface Message {
   id: string;
   content: string;
   senderId: string;
   timestamp: string;
+  userName?: string;
+  avatarUrl?: string;
 }
 
 interface ChatRoomProps {
@@ -26,30 +29,86 @@ export default function ChatRoom({ roomId, userId }: ChatRoomProps) {
   const socketRef = useRef<Socket>();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Load previous messages when component mounts
   useEffect(() => {
-    socketRef.current = io('/', {
-      path: '/socket.io'
+    loadPreviousMessages();
+  }, [roomId]);
+
+  // Setup socket connection
+  useEffect(() => {
+    const socketUrl = import.meta.env.DEV ? 'http://localhost:3001' : window.location.origin;
+    socketRef.current = io(socketUrl, {
+      transports: ['websocket', 'polling'],
+      timeout: 20000
     });
 
     socketRef.current.on('connect', () => {
       setConnected(true);
       setError(null);
-      socketRef.current?.emit('join-chat', { roomId, userId });
+      logger.info('Chat connected to WebRTC server');
+      socketRef.current?.emit('join-room', { roomId, userId, userName: 'User' });
     });
 
-    socketRef.current.on('chat-message', (message: Message) => {
-      setMessages(prev => [...prev, message]);
+    socketRef.current.on('room-message', (data: { userId: string; message: string; timestamp: number }) => {
+      const newMessage: Message = {
+        id: `${data.timestamp}-${data.userId}`,
+        content: data.message,
+        senderId: data.userId,
+        timestamp: new Date(data.timestamp).toISOString(),
+        userName: data.userId === userId ? 'You' : 'User'
+      };
+      
+      setMessages(prev => {
+        // Check if message already exists to avoid duplicates
+        const exists = prev.find(msg => msg.id === newMessage.id);
+        if (exists) return prev;
+        return [...prev, newMessage];
+      });
     });
 
-    socketRef.current.on('error', (err: Error) => {
-      setError(err.message);
-      logger.error('Chat socket error:', err);
+    socketRef.current.on('connect_error', (err) => {
+      setError('Failed to connect to chat server');
+      logger.error('Chat socket connection error:', err);
+    });
+
+    socketRef.current.on('disconnect', () => {
+      setConnected(false);
+      logger.info('Chat disconnected from server');
     });
 
     return () => {
-      socketRef.current?.disconnect();
+      if (socketRef.current) {
+        socketRef.current.emit('leave-room', { roomId, userId });
+        socketRef.current.disconnect();
+      }
     };
   }, [roomId, userId]);
+
+  const loadPreviousMessages = async () => {
+    try {
+      const { data, error } = await supabase.rpc('get_room_messages', {
+        target_room_id: roomId,
+        message_limit: 50
+      });
+
+      if (error) throw error;
+
+      if (data) {
+        const formattedMessages: Message[] = data.map((msg: any) => ({
+          id: msg.id,
+          content: msg.content,
+          senderId: msg.user_id,
+          timestamp: msg.created_at,
+          userName: msg.user_name || 'User',
+          avatarUrl: msg.avatar_url
+        })).reverse(); // Reverse to show oldest first
+
+        setMessages(formattedMessages);
+      }
+    } catch (err) {
+      logger.error('Failed to load previous messages:', err);
+    }
+  };
 
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -62,15 +121,48 @@ export default function ChatRoom({ roomId, userId }: ChatRoomProps) {
 
     try {
       setSending(true);
-      const message: Message = {
-        id: crypto.randomUUID(),
-        content: newMessage.trim(),
-        senderId: userId,
-        timestamp: new Date().toISOString()
-      };
+      const messageContent = newMessage.trim();
+      
+      // Store message in Supabase
+      const { error: dbError } = await supabase
+        .from('chat_messages')
+        .insert([{
+          room_id: roomId,
+          user_id: userId,
+          content: messageContent,
+          message_type: 'text'
+        }]);
 
-      socketRef.current?.emit('send-message', { roomId, message });
-      setMessages(prev => [...prev, message]);
+      if (dbError) {
+        throw dbError;
+      }
+
+      const timestamp = Date.now();
+      
+      // Send message via socket for real-time delivery
+      socketRef.current?.emit('room-message', {
+        roomId,
+        userId,
+        message: messageContent,
+        timestamp
+      });
+
+      // Also add to local state immediately for better UX (will dedupe if server sends back)
+      const localMessage: Message = {
+        id: `${timestamp}-${userId}`,
+        content: messageContent,
+        senderId: userId,
+        timestamp: new Date(timestamp).toISOString(),
+        userName: 'You'
+      };
+      
+      setMessages(prev => {
+        // Check if message already exists to avoid duplicates
+        const exists = prev.find(msg => msg.id === localMessage.id);
+        if (exists) return prev;
+        return [...prev, localMessage];
+      });
+
       setNewMessage('');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to send message';

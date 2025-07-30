@@ -15,6 +15,8 @@ import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
 import Scholarships from './pages/Scholarships';
 import GroupStudy from './pages/GroupStudy';
+import StudyPartnerDiscovery from './pages/StudyPartnerDiscovery';
+import Friends from './pages/Friends';
 import { UserDataProvider } from './context/UserDataProvider';
 import Landing from './pages/Landing';
 import About from './pages/About';
@@ -246,6 +248,22 @@ function MainApp() {
           element={
             <PrivateRoute>
               <GroupStudy />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/discover-partners"
+          element={
+            <PrivateRoute>
+              <StudyPartnerDiscovery />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/friends"
+          element={
+            <PrivateRoute>
+              <Friends />
             </PrivateRoute>
           }
         />

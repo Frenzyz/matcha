@@ -47,6 +47,12 @@ export default function Settings() {
   const [newPassword1, setNewPassword1] = useState('');
   const [newPassword2, setNewPassword2] = useState('');
   const [resetOption, setResetOption] = useState<'direct' | 'email'>('direct');
+  
+  // Enhanced profile settings
+  const [profileSettings, setProfileSettings] = useState({
+    is_searchable: true,
+    is_available_now: false
+  });
 
   useEffect(() => {
     if (userData) {
@@ -57,6 +63,69 @@ export default function Settings() {
       });
     }
   }, [userData]);
+
+  // Load enhanced profile settings
+  useEffect(() => {
+    const loadEnhancedProfile = async () => {
+      if (!user) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('enhanced_profiles')
+          .select('is_searchable, is_available_now')
+          .eq('user_id', user.id)
+          .single();
+
+        if (!error && data) {
+          setProfileSettings({
+            is_searchable: data.is_searchable,
+            is_available_now: data.is_available_now
+          });
+        }
+      } catch (err) {
+        logger.error('Error loading enhanced profile:', err);
+      }
+    };
+
+    loadEnhancedProfile();
+  }, [user]);
+
+  const handleProfileSettingsUpdate = async (setting: string, value: boolean) => {
+    if (!user) return;
+
+    try {
+      setIsSaving(true);
+      
+      // Update local state immediately for better UX
+      setProfileSettings(prev => ({ ...prev, [setting]: value }));
+
+      const { error } = await supabase
+        .from('enhanced_profiles')
+        .upsert({
+          user_id: user.id,
+          [setting]: value,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id'
+        });
+
+      if (error) throw error;
+
+      setMessage({ 
+        type: 'success', 
+        text: 'Privacy settings updated successfully!' 
+      });
+    } catch (err) {
+      // Revert local state on error
+      setProfileSettings(prev => ({ ...prev, [setting]: !value }));
+      
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update privacy settings';
+      setMessage({ type: 'error', text: errorMessage });
+      logger.error('Profile settings update error:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const { getRootProps, getInputProps } = useDropzone({
     accept: {
@@ -348,6 +417,47 @@ export default function Settings() {
                   </button>
                 </div>
               </form>
+            </div>
+
+            {/* Privacy Settings */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+              <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-6">
+                Privacy Settings
+              </h2>
+              
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-900 dark:text-white">
+                      Allow others to find me
+                    </h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      When enabled, other users can discover your profile in search results
+                    </p>
+                  </div>
+                  <Switch
+                    checked={profileSettings.is_searchable}
+                    onCheckedChange={(checked) => handleProfileSettingsUpdate('is_searchable', checked)}
+                    disabled={isSaving}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-900 dark:text-white">
+                      Show as available now
+                    </h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      Display an online indicator to other users when you're available for study sessions
+                    </p>
+                  </div>
+                  <Switch
+                    checked={profileSettings.is_available_now}
+                    onCheckedChange={(checked) => handleProfileSettingsUpdate('is_available_now', checked)}
+                    disabled={isSaving}
+                  />
+                </div>
+              </div>
             </div>
 
             {/* Theme Settings */}

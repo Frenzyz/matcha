@@ -42,10 +42,7 @@ export default function GroupStudy() {
       setLoading(true);
       const { data, error } = await supabase
         .from('study_rooms')
-        .select(`
-          *,
-          participant_count
-        `)
+        .select('*')
         .eq('status', 'active')
         .order('created_at', { ascending: false });
 

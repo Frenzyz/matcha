@@ -2,7 +2,7 @@
 
 # Project settings
 project_id = "matcha-local"
-project_name = "Matcha Local Dev"
+project_name = "Matcha"
 
 [api]
 port = 54321
