@@ -6,6 +6,7 @@ import ChatRoom from './chat/ChatRoom';
 import { ArrowLeft, Users, Trash2, Loader2 } from 'lucide-react';
 import { StudyRoom as StudyRoomType } from '../../types/study-room';
 import { logger } from '../../utils/logger';
+import { useTabSwitchProtection } from '../../hooks/useTabVisibility';
 
 interface StudyRoomProps {
   roomId: string;
@@ -20,16 +21,30 @@ export default function StudyRoom({ roomId, onLeave }: StudyRoomProps) {
   const [error, setError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const { user } = useAuth();
+  const { isTabSwitchInProgress } = useTabSwitchProtection();
 
   useEffect(() => {
     if (user) {
       loadRoom();
       const subscription = subscribeToRoomUpdates();
       return () => {
-        subscription.unsubscribe();
+        // Prevent unsubscribing during tab switches
+        if (!isTabSwitchInProgress()) {
+          subscription.unsubscribe();
+        }
       };
     }
-  }, [user]);
+  }, [user, isTabSwitchInProgress]);
+
+  // Protected leave function that prevents leaving during tab switches
+  const handleLeave = () => {
+    if (isTabSwitchInProgress()) {
+      logger.info('Room leave prevented due to tab switch');
+      return;
+    }
+    logger.info('User leaving room - legitimate action');
+    onLeave();
+  };
 
   const loadRoom = async () => {
     try {
@@ -45,7 +60,7 @@ export default function StudyRoom({ roomId, onLeave }: StudyRoomProps) {
     } catch (error) {
       logger.error('Error loading room:', error);
       setError('Failed to load study room');
-      onLeave();
+      handleLeave();
     }
   };
 
@@ -78,7 +93,7 @@ export default function StudyRoom({ roomId, onLeave }: StudyRoomProps) {
         (payload) => {
           logger.info('Current room deleted:', payload.old);
           setError('This room has been deleted');
-          onLeave();
+          handleLeave();
         }
       )
       .subscribe((status) => {
@@ -102,7 +117,7 @@ export default function StudyRoom({ roomId, onLeave }: StudyRoomProps) {
         .eq('id', roomId);
 
       if (error) throw error;
-      onLeave();
+      handleLeave();
     } catch (error) {
       logger.error('Error deleting room:', error);
       setError('Failed to delete room');
@@ -115,7 +130,7 @@ export default function StudyRoom({ roomId, onLeave }: StudyRoomProps) {
       <div className="p-6 text-center">
         <p className="text-red-500">{error}</p>
         <button
-          onClick={onLeave}
+          onClick={handleLeave}
           className="mt-4 px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
         >
           Go Back
@@ -138,7 +153,7 @@ export default function StudyRoom({ roomId, onLeave }: StudyRoomProps) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
-              onClick={onLeave}
+              onClick={handleLeave}
               className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
             >
               <ArrowLeft size={20} />

@@ -50,6 +50,11 @@ export function useConnection() {
   }, [checkSupabaseConnection]);
 
   const handleOffline = useCallback(() => {
+    // Don't immediately set offline if tab is hidden (false positive)
+    if (document.hidden) {
+      logger.info('Tab hidden, ignoring offline event');
+      return;
+    }
     setIsOnline(false);
     setIsSupabaseConnected(false);
   }, []);

@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { logger } from '../../utils/logger';
 import RecordRTC from 'recordrtc';
 import { webRTCService, ParticipantStream } from '../../services/modernWebRTC';
+import { useTabSwitchProtection } from '../../hooks/useTabVisibility';
 
 interface VideoCallProps {
   roomId: string;
@@ -12,6 +13,7 @@ interface VideoCallProps {
 
 export default function VideoCall({ roomId, participants }: VideoCallProps) {
   const { user } = useAuth();
+  const { isTabSwitchInProgress, isVisible } = useTabSwitchProtection();
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
   const [videoEnabled, setVideoEnabled] = useState(true);
@@ -64,9 +66,15 @@ export default function VideoCall({ roomId, participants }: VideoCallProps) {
     setupWebRTCService();
 
     return () => {
-      // Only cleanup when component unmounts or roomId/user changes, not on tab switching
+      // Prevent cleanup during tab switching to avoid false disconnections
+      if (isTabSwitchInProgress()) {
+        logger.info('VideoCall cleanup prevented due to tab switch');
+        return;
+      }
+
+      // Only cleanup when component actually unmounts or roomId/user changes
       if (hasRequestedMedia) {
-        logger.info('VideoCall cleanup triggered');
+        logger.info('VideoCall cleanup triggered - legitimate unmount');
         webRTCService.leaveRoom();
         if (localStream) {
           localStream.getTracks().forEach(track => track.stop());
@@ -79,7 +87,7 @@ export default function VideoCall({ roomId, participants }: VideoCallProps) {
         }
       }
     };
-  }, [roomId, user]); // Removed hasRequestedMedia, localStream, screenStream from dependencies
+  }, [roomId, user, isTabSwitchInProgress]); // Added isTabSwitchInProgress dependency
 
   // Monitor connection status
   useEffect(() => {
