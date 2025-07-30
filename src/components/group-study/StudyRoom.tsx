@@ -153,11 +153,11 @@ export default function StudyRoom({ roomId, onLeave }: StudyRoomProps) {
         </div>
       </div>
 
-      <div className="flex-1 grid grid-cols-3 gap-4 p-4">
-        <div className="col-span-2">
+      <div className="flex-1 grid grid-cols-3 gap-4 p-4 min-h-0">
+        <div className="col-span-2 min-h-0">
           <VideoCall roomId={roomId} participants={participants} />
         </div>
-        <div className="col-span-1">
+        <div className="col-span-1 min-h-0 flex flex-col">
           {user && <ChatRoom roomId={roomId} userId={user.id} />}
         </div>
       </div>
