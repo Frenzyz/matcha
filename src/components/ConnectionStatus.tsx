@@ -1,10 +1,23 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { WifiOff, Database, RefreshCw } from 'lucide-react';
 import { useConnection } from '../hooks/useConnection';
 
 export default function ConnectionStatus() {
   const { isOnline, isSupabaseConnected, checkConnection } = useConnection();
+  const [isTabVisible, setIsTabVisible] = useState(true);
 
+  // Track tab visibility to prevent false offline states
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      setIsTabVisible(!document.hidden);
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
+  // Don't show connection issues when tab is hidden (false positives)
+  if (!isTabVisible) return null;
   if (isOnline && isSupabaseConnected) return null;
 
   return (
