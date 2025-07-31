@@ -279,14 +279,34 @@ io.on('connection', (socket) => {
     
     console.log(`🔒 Secure join: ${sanitizedUserId} (${sanitizedUserName}) → room ${sanitizedRoomId}`);
     
-    // CRITICAL FIX: Clean up any existing instances of this user first
+    // CRITICAL FIX: Prevent multiple connections for same user
     const existingRoom = userRooms.get(userId);
     if (existingRoom) {
       socket.leave(existingRoom);
       handleUserLeave(existingRoom, userId, socket);
     }
 
-    // Also check if this user exists in the target room with different socket
+    // Check if this user is already connected with a different socket
+    let existingSocketId = null;
+    for (const [socketId, mappedUserId] of userRooms.entries()) {
+      if (mappedUserId === roomId) {
+        const roomParticipants = rooms.get(roomId);
+        if (roomParticipants && roomParticipants.has(userId)) {
+          existingSocketId = roomParticipants.get(userId).socketId;
+          break;
+        }
+      }
+    }
+
+    // If user already exists with different socket, disconnect the old one
+    if (existingSocketId && existingSocketId !== socket.id) {
+      console.log(`🔄 User ${sanitizedUserId} reconnecting - disconnecting old socket ${existingSocketId}`);
+      const oldSocket = io.sockets.sockets.get(existingSocketId);
+      if (oldSocket) {
+        oldSocket.disconnect(true);
+      }
+    }
+
     if (!rooms.has(roomId)) {
       rooms.set(roomId, new Map());
     }

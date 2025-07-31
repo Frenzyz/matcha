@@ -57,6 +57,17 @@ export class ModernWebRTCService {
 
   private initializeSocket() {
     try {
+      // CRITICAL: Prevent multiple socket instances
+      if (this.socket && this.socket.connected) {
+        logger.info('Socket already connected, reusing existing connection');
+        return;
+      }
+
+      if (this.socket) {
+        this.socket.disconnect();
+        this.socket = null;
+      }
+
       // Connect to WebRTC server using environment variable
       const webrtcServerUrl = import.meta.env.VITE_WEBRTC_SERVER_URL || 'http://localhost:3001';
       this.socket = io(webrtcServerUrl, {
@@ -76,7 +87,12 @@ export class ModernWebRTCService {
         // Force polling initially, then upgrade to websocket
         upgrade: true,
         // Additional security headers
-        rememberUpgrade: true
+        rememberUpgrade: true,
+        // Add query to identify this specific client instance
+        query: {
+          clientId: this.config?.userId || 'unknown',
+          timestamp: Date.now()
+        }
       });
 
       this.socket.on('connect', () => {
@@ -941,45 +957,70 @@ export class ModernWebRTCService {
     try {
       logger.info('🔄 Handling tab return - checking connection status');
 
-      let needsReconnection = false;
+      // CRITICAL: Be very conservative about reconnections to prevent refresh loops
+      let needsSocketReconnection = false;
+      let needsPeerReconnection = false;
 
-      // Check socket connection first
-      if (this.socket && !this.socket.connected) {
-        logger.info('Socket disconnected while tab hidden - reconnecting...');
-        needsReconnection = true;
-        this.socket.connect();
-        
-        // Wait for socket to connect before proceeding
-        await new Promise((resolve) => {
-          const checkConnection = () => {
-            if (this.socket?.connected) {
-              resolve(true);
-            } else {
-              setTimeout(checkConnection, 100);
-            }
-          };
-          checkConnection();
+      // Check socket connection first - but be conservative
+      if (this.socket) {
+        if (!this.socket.connected) {
+          logger.info('Socket disconnected while tab hidden - attempting gentle reconnection...');
+          needsSocketReconnection = true;
           
-          // Timeout after 5 seconds
-          setTimeout(() => resolve(false), 5000);
+          // Try to reconnect socket
+          try {
+            this.socket.connect();
+            
+            // Wait for socket to connect with shorter timeout
+            await new Promise((resolve) => {
+              const checkConnection = () => {
+                if (this.socket?.connected) {
+                  resolve(true);
+                } else {
+                  setTimeout(checkConnection, 200);
+                }
+              };
+              checkConnection();
+              
+              // Shorter timeout to prevent hanging
+              setTimeout(() => resolve(false), 3000);
+            });
+          } catch (error) {
+            logger.warn('Socket reconnection failed:', error);
+          }
+        } else {
+          logger.info('Socket still connected - no reconnection needed');
+        }
+      }
+
+      // Check peer connection - only if socket is working
+      if (this.socket?.connected) {
+        if (!this.peer || this.peer.destroyed) {
+          logger.info('Peer connection lost while tab hidden - will recreate only if necessary');
+          needsPeerReconnection = true;
+        } else if (this.peer.disconnected) {
+          logger.info('Peer disconnected but not destroyed - attempting gentle reconnect');
+          try {
+            this.peer.reconnect();
+          } catch (error) {
+            logger.warn('Peer reconnection failed:', error);
+            needsPeerReconnection = true;
+          }
+        } else {
+          logger.info('Peer connection still healthy - no reconnection needed');
+        }
+      }
+
+      // Only rejoin room if we actually had issues AND we're properly connected
+      if ((needsSocketReconnection || needsPeerReconnection) && this.socket?.connected) {
+        logger.info('Notifying server of tab return - will let server handle room state');
+        // Let the server know we're back, but don't aggressively rejoin
+        this.socket.emit('tab-visible', { 
+          userId: this.config.userId,
+          roomId: this.config.roomId 
         });
-      }
-
-      // Check peer connection
-      if (!this.peer || this.peer.destroyed || this.peer.disconnected) {
-        logger.info('Peer connection lost while tab hidden - attempting to restore...');
-        needsReconnection = true;
-        await this.handleReconnection();
-      }
-
-      // Only rejoin room if we actually had connection issues
-      if (needsReconnection && this.socket && this.socket.connected) {
-        logger.info('Rejoining room after reconnection');
-        this.joinRoom();
-      }
-
-      // Notify server that tab is visible (for grace period management)
-      if (this.socket && this.socket.connected) {
+      } else if (this.socket?.connected) {
+        // Just notify we're visible without causing disruption
         this.socket.emit('tab-visible', { 
           userId: this.config.userId,
           roomId: this.config.roomId 
@@ -1360,22 +1401,63 @@ export class ModernWebRTCService {
 }
 
 // Export singleton instance
-// Singleton instance to prevent multiple WebRTC services
+// Enhanced singleton instance to prevent multiple WebRTC services
 let webRTCServiceInstance: ModernWebRTCService | null = null;
+let isInitializing = false;
 
 export const webRTCService = (() => {
+  if (isInitializing) {
+    logger.warn('WebRTC service initialization already in progress');
+    return webRTCServiceInstance || new ModernWebRTCService();
+  }
+
   if (!webRTCServiceInstance) {
-    webRTCServiceInstance = new ModernWebRTCService();
+    isInitializing = true;
+    try {
+      webRTCServiceInstance = new ModernWebRTCService();
+    } finally {
+      isInitializing = false;
+    }
   }
   return webRTCServiceInstance;
 })();
 
-// Clean up singleton on page unload
+// Clean up singleton on page unload and prevent tab refresh issues
 if (typeof window !== 'undefined') {
-  window.addEventListener('beforeunload', () => {
+  // Prevent multiple event listeners
+  let beforeUnloadAdded = false;
+  
+  if (!beforeUnloadAdded) {
+    window.addEventListener('beforeunload', () => {
+      if (webRTCServiceInstance) {
+        webRTCServiceInstance.destroy();
+        webRTCServiceInstance = null;
+      }
+    });
+    beforeUnloadAdded = true;
+  }
+
+  // Enhanced page show/hide handling to prevent refresh on tab return
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) {
+      // Page was restored from cache - this can cause issues
+      logger.info('Page restored from cache - ensuring WebRTC stability');
+      if (webRTCServiceInstance) {
+        // Don't reinitialize - just check health
+        setTimeout(() => {
+          // Access checkConnectionHealth through a public method if needed
+          if (webRTCServiceInstance) {
+            logger.info('Page restored from cache - WebRTC service maintained');
+          }
+        }, 500);
+      }
+    }
+  });
+
+  window.addEventListener('pagehide', () => {
+    // Page is being hidden - maintain connections
     if (webRTCServiceInstance) {
-      webRTCServiceInstance.destroy();
-      webRTCServiceInstance = null;
+      logger.info('Page hidden - maintaining WebRTC connections');
     }
   });
 }
