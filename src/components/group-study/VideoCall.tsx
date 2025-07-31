@@ -5,6 +5,7 @@ import { logger } from '../../utils/logger';
 import RecordRTC from 'recordrtc';
 import { webRTCService, ParticipantStream } from '../../services/modernWebRTC';
 import { useTabSwitchProtection } from '../../hooks/useTabVisibility';
+import { useSimpleConnectionMonitor } from '../../hooks/useSimpleConnectionMonitor';
 import { SecurityBadge } from '../SecurityStatus';
 import { forceMediaCleanup, quickMediaCleanup } from '../../utils/mediaCleanup';
 
@@ -15,7 +16,7 @@ interface VideoCallProps {
 
 export default function VideoCall({ roomId, participants }: VideoCallProps) {
   const { user } = useAuth();
-  const { monitor, startMonitoring, stopMonitoring, onConnectionHealthChange, getConnectionStatus } = useWebRTCConnectionMonitor();
+  const { status: connectionMonitorStatus, setConnected } = useSimpleConnectionMonitor();
   const { isTabSwitchInProgress, isVisible, timeHidden } = useTabSwitchProtection();
   // Removed duplicate line
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
@@ -28,6 +29,7 @@ export default function VideoCall({ roomId, participants }: VideoCallProps) {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isJoiningRoom, setIsJoiningRoom] = useState(false);
   const [hasRequestedMedia, setHasRequestedMedia] = useState(false);
+  const [connectionHealth, setConnectionHealth] = useState({ isHealthy: true, healthyConnections: 0, totalConnections: 0 });
   const [remoteParticipants, setRemoteParticipants] = useState<ParticipantStream[]>([]);
   const [connectionState, setConnectionState] = useState<RTCPeerConnectionState>('new');
   const [networkQuality, setNetworkQuality] = useState<'excellent' | 'good' | 'poor' | 'unknown'>('unknown');
@@ -191,12 +193,7 @@ export default function VideoCall({ roomId, participants }: VideoCallProps) {
 
       setIsInitialized(true);
       setConnectionStatus('Connected successfully');
-      
-      // Start connection monitoring
-      const participants = webRTCService.getParticipants();
-      if (participants.size > 0) {
-        startMonitoring(new Map(Array.from(participants.entries())));
-      }
+      setConnected(true);
       
       logger.info('Successfully joined video room');
 
@@ -205,6 +202,7 @@ export default function VideoCall({ roomId, participants }: VideoCallProps) {
       logger.error('Video room join error:', err);
       setError(errorMessage);
       setConnectionStatus('Connection failed');
+      setConnected(false);
     } finally {
       setIsJoiningRoom(false);
     }

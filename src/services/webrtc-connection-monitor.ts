@@ -1,5 +1,4 @@
 import { logger } from '../utils/logger';
-import { useTabVisibility } from '../hooks/useTabVisibility';
 
 export interface ConnectionHealthStatus {
   isHealthy: boolean;
