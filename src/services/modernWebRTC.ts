@@ -67,14 +67,12 @@ export class ModernWebRTCService {
         reconnectionAttempts: 5,
         reconnectionDelay: 1000,
         reconnectionDelayMax: 5000,
-        maxReconnectionAttempts: 5,
         // Enhanced configuration to handle cookies and cross-origin issues
         withCredentials: true,
         extraHeaders: {
           'Access-Control-Allow-Credentials': 'true'
         },
-        // Cookie configuration for cross-origin compatibility
-        cookiePrefix: 'matcha-io',
+        // Cookie configuration for cross-origin compatibility (handled by server)
         // Force polling initially, then upgrade to websocket
         upgrade: true,
         // Additional security headers
@@ -171,7 +169,7 @@ export class ModernWebRTCService {
       this.peer = new Peer(config.userId, {
         config: {
           iceServers,
-          iceCandidatePoolSize: 10,
+          iceCandidatePoolSize: 4, // Reduced for faster connection
           iceTransportPolicy: 'all', // Allow all transport types
           bundlePolicy: 'max-bundle', // Bundle all media into single transport
           rtcpMuxPolicy: 'require', // Require RTCP multiplexing for security
@@ -180,28 +178,13 @@ export class ModernWebRTCService {
           // Enforce secure transport protocols
           sdpSemantics: 'unified-plan', // Use unified plan for better security
           // Additional security constraints
-          offerExtmapAllowMixed: false // Disable mixed extension maps for security
-          // DTLS fingerprint verification already configured above
+          offerExtmapAllowMixed: false, // Disable mixed extension maps for security
+          // Optimization for faster connections
+          iceGatheringTimeout: 5000 // Limit ICE gathering time
         },
         // Enhanced PeerJS security settings
         debug: import.meta.env.DEV ? 2 : 0, // Disable debug in production
-        secure: true, // Enforce secure connections when available
-        // Connection constraints for security
-        constraints: {
-          mandatory: {
-            // Require encryption for all connections
-            DtlsSrtpKeyAgreement: true,
-            // Additional security constraints
-            googCpuOveruseDetection: true,
-            googSuspendBelowMinBitrate: true
-          },
-          optional: [
-            // Enable additional security features
-            { googIPv6: true },
-            { googDscp: true },
-            { googCpuOveruseEncodeUsage: true }
-          ]
-        }
+        secure: true // Enforce secure connections when available
       });
 
       return new Promise((resolve, reject) => {
@@ -259,42 +242,22 @@ export class ModernWebRTCService {
   }
 
   private getOptimalIceServers(): RTCIceServer[] {
-    // Optimized ICE server configuration - limited to 4 servers to prevent slow discovery
-    const secureIceServers: RTCIceServer[] = [
-      // Primary Google STUN server (most reliable)
+    // Minimal ICE server configuration for fastest discovery
+    // Using only 2 servers maximum for immediate peer visibility
+    const minimalIceServers: RTCIceServer[] = [
+      // Single reliable STUN server
       { urls: 'stun:stun.l.google.com:19302' },
       
-      // Cloudflare STUN server as backup
-      { urls: 'stun:stun.cloudflare.com:3478' },
-      
-      // Primary TURN server for NAT traversal
-      {
-        urls: 'turn:openrelay.metered.ca:80',
-        username: 'openrelayproject',
-        credential: 'openrelayproject'
-      },
-      
-      // Secondary TURN server for redundancy
+      // Single TURN server for NAT traversal
       {
         urls: 'turn:openrelay.metered.ca:443',
-        username: 'openrelayproject', 
+        username: 'openrelayproject',
         credential: 'openrelayproject'
       }
     ];
 
-    // In production, use even fewer servers for optimal performance
-    if (import.meta.env.PROD) {
-      return [
-        { urls: 'stun:stun.l.google.com:19302' },
-        {
-          urls: 'turn:openrelay.metered.ca:443',
-          username: 'openrelayproject',
-          credential: 'openrelayproject'
-        }
-      ];
-    }
-
-    return secureIceServers;
+    // Use same minimal configuration in all environments for consistency
+    return minimalIceServers;
   }
 
   private getConnectionTimeout(): number {
@@ -352,11 +315,11 @@ export class ModernWebRTCService {
     if (!this.config || this.isDestroyed) return;
 
     try {
-      // Generate a new unique user ID to avoid collisions
-      const originalUserId = this.config.userId;
-      const newUserId = `${originalUserId}-reconnect-${Date.now()}`;
+      // Get the base user ID (without any previous reconnect suffixes)
+      const baseUserId = this.getBaseUserId(this.config.userId);
+      const newUserId = `${baseUserId}-reconnect-${Date.now()}`;
       
-      logger.info(`Creating new peer with ID: ${newUserId} (was: ${originalUserId})`);
+      logger.info(`Creating new peer with ID: ${newUserId} (base: ${baseUserId})`);
       
       // Update config with new ID
       const newConfig = { 
@@ -379,6 +342,11 @@ export class ModernWebRTCService {
     } catch (error) {
       logger.error('Failed to create new connection after destroy:', error);
     }
+  }
+
+  private getBaseUserId(userId: string): string {
+    // Remove any existing reconnect suffixes to prevent ID bloat
+    return userId.split('-reconnect-')[0];
   }
 
   private startConnectionMonitoring(): void {
