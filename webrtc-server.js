@@ -295,23 +295,32 @@ io.on('connection', (socket) => {
       rooms.set(roomId, new Map());
     }
     const roomParticipants = rooms.get(roomId);
+    
+    // Check if user already exists in room (prevent duplicates)
+    const wasAlreadyInRoom = roomParticipants.has(userId);
+    
     roomParticipants.set(userId, {
       socketId: socket.id,
       userName,
       joinTime: Date.now()
     });
 
-    // Notify others in the room
-    socket.to(roomId).emit('user-joined', { userId, userName });
+    // Only notify others if this is a new join (not a reconnection)
+    if (!wasAlreadyInRoom) {
+      socket.to(roomId).emit('user-joined', { userId, userName });
+      console.log(`🔔 New user ${userId} joined room ${roomId}`);
+    } else {
+      console.log(`🔄 User ${userId} reconnected to room ${roomId}`);
+    }
     
-    // Send current participants to the new user
+    // Send current participants to the joining user (excluding themselves)
     const currentParticipants = Array.from(roomParticipants.entries())
       .filter(([id]) => id !== userId)
       .map(([id, info]) => ({ userId: id, userName: info.userName }));
     
     socket.emit('room-participants', currentParticipants);
     
-    console.log(`Room ${roomId} now has ${roomParticipants.size} participants`);
+    console.log(`Room ${roomId} now has ${roomParticipants.size} participants: ${Array.from(roomParticipants.keys()).join(', ')}`);
   });
 
   socket.on('leave-room', (data) => {

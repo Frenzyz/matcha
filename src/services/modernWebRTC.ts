@@ -50,6 +50,12 @@ export class ModernWebRTCService {
   private trustedFingerprints: Set<string> = new Set();
 
   constructor() {
+    // Reset all callbacks to prevent duplicates
+    this.onStreamAddedCallback = undefined;
+    this.onStreamRemovedCallback = undefined;
+    this.onParticipantJoinedCallback = undefined;
+    this.onParticipantLeftCallback = undefined;
+    
     // Initialize socket connection
     this.initializeSocket();
     this.setupVisibilityHandler();
@@ -57,6 +63,12 @@ export class ModernWebRTCService {
 
   private initializeSocket() {
     try {
+      // Don't reinitialize if socket already exists
+      if (this.socket && !this.socket.disconnected) {
+        logger.info('Socket already initialized and connected');
+        return;
+      }
+
       // Connect to WebRTC server using environment variable
       const webrtcServerUrl = import.meta.env.VITE_WEBRTC_SERVER_URL || 'http://localhost:3001';
       this.socket = io(webrtcServerUrl, {
@@ -118,8 +130,14 @@ export class ModernWebRTCService {
 
       this.socket.on('user-joined', (data: { userId: string; userName: string }) => {
         logger.info('User joined room:', data);
-        this.onParticipantJoinedCallback?.(data.userId, data.userName);
-        this.initiateCall(data.userId);
+        
+        // Only handle new users (avoid duplicates from room-participants)
+        if (!this.participants.has(data.userId)) {
+          this.onParticipantJoinedCallback?.(data.userId, data.userName);
+          this.initiateCall(data.userId);
+        } else {
+          logger.debug(`User ${data.userId} already exists, skipping duplicate`);
+        }
       });
 
       this.socket.on('user-left', (data: { userId: string }) => {
@@ -135,17 +153,27 @@ export class ModernWebRTCService {
         this.handleAnswer(data.from, data.answer);
       });
 
-      // CRITICAL: Handle existing participants when joining room
+      // CRITICAL: Handle existing participants when joining room (only for initial join)
       this.socket.on('room-participants', (participants: Array<{ userId: string; userName: string }>) => {
         logger.info('Received existing participants:', participants);
+        
+        // Clear any existing participants to avoid duplicates
+        this.participants.clear();
+        
         // Connect to all existing participants
         participants.forEach(participant => {
+          // Skip self
+          if (participant.userId === this.config?.userId) {
+            return;
+          }
+          
           logger.info(`Connecting to existing participant: ${participant.userName} (${participant.userId})`);
           this.onParticipantJoinedCallback?.(participant.userId, participant.userName);
+          
           // Initiate call to existing participant
           setTimeout(() => {
             this.initiateCall(participant.userId);
-          }, 500); // Small delay to ensure peer connection is ready
+          }, 1000); // Increased delay to prevent connection conflicts
         });
       });
 
@@ -159,6 +187,10 @@ export class ModernWebRTCService {
     if (!this.validateAuthentication(config)) {
       throw new Error('WebRTC authentication validation failed');
     }
+
+    // Clear any existing participants before initializing
+    this.participants.clear();
+    logger.info('🔄 Cleared existing participants before initialization');
 
     const result = await this.initializeWithRetry(config, 0);
     
@@ -635,22 +667,36 @@ export class ModernWebRTCService {
 
   private handleCallStream(call: MediaConnection) {
     call.on('stream', (remoteStream) => {
+      const userId = call.peer;
+      
+      // Check if participant already exists to prevent duplicates
+      if (this.participants.has(userId)) {
+        logger.warn(`Participant ${userId} already exists, replacing with new stream`);
+        // Clean up old connection
+        const oldParticipant = this.participants.get(userId);
+        if (oldParticipant?.connection && oldParticipant.connection !== call) {
+          oldParticipant.connection.close();
+        }
+      }
+
       const participant: ParticipantStream = {
-        userId: call.peer,
+        userId: userId,
         stream: remoteStream,
         connection: call
       };
 
-      this.participants.set(call.peer, participant);
+      this.participants.set(userId, participant);
+      logger.info(`✅ Stream added for participant: ${userId}`);
       this.onStreamAddedCallback?.(participant);
     });
 
     call.on('close', () => {
+      logger.info(`🔌 Call closed for participant: ${call.peer}`);
       this.handleParticipantLeft(call.peer);
     });
 
     call.on('error', (error) => {
-      logger.error('Call error:', error);
+      logger.error(`❌ Call error for ${call.peer}:`, error);
       this.handleParticipantLeft(call.peer);
     });
   }
@@ -676,10 +722,30 @@ export class ModernWebRTCService {
   private handleParticipantLeft(userId: string) {
     const participant = this.participants.get(userId);
     if (participant) {
-      participant.connection?.close();
+      logger.info(`🚪 Cleaning up participant: ${userId}`);
+      
+      // Close connection
+      if (participant.connection) {
+        participant.connection.close();
+      }
+      
+      // Stop all tracks in the stream
+      if (participant.stream) {
+        participant.stream.getTracks().forEach(track => {
+          track.stop();
+        });
+      }
+      
+      // Remove from participants map
       this.participants.delete(userId);
+      
+      // Notify callbacks
       this.onStreamRemovedCallback?.(userId);
       this.onParticipantLeftCallback?.(userId);
+      
+      logger.info(`✅ Participant ${userId} cleaned up successfully`);
+    } else {
+      logger.debug(`Participant ${userId} not found for cleanup`);
     }
   }
 
@@ -728,15 +794,26 @@ export class ModernWebRTCService {
   }
 
   leaveRoom() {
-    // Close all connections
-    this.participants.forEach((participant) => {
-      participant.connection?.close();
+    logger.info('🚪 Leaving WebRTC room...');
+    
+    // Close all participant connections
+    this.participants.forEach((participant, userId) => {
+      logger.debug(`Closing connection for participant: ${userId}`);
+      if (participant.connection) {
+        participant.connection.close();
+      }
+      if (participant.stream) {
+        participant.stream.getTracks().forEach(track => track.stop());
+      }
     });
     this.participants.clear();
 
     // Stop local stream
     if (this.localStream) {
-      this.localStream.getTracks().forEach(track => track.stop());
+      this.localStream.getTracks().forEach(track => {
+        track.stop();
+        logger.debug('Stopped local track:', track.kind);
+      });
       this.localStream = null;
     }
 
@@ -749,8 +826,12 @@ export class ModernWebRTCService {
     }
 
     // Close peer connection
-    this.peer?.destroy();
-    this.peer = null;
+    if (this.peer) {
+      this.peer.destroy();
+      this.peer = null;
+    }
+    
+    logger.info('✅ Successfully left WebRTC room');
   }
 
   private setupVisibilityHandler() {
