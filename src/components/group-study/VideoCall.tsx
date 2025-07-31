@@ -47,10 +47,19 @@ export default function VideoCall({ roomId, participants }: VideoCallProps) {
 
       // Setup event handlers
       webRTCService.onStreamAdded((participant) => {
-        logger.info('Stream added for participant:', participant.userId);
+        logger.info('🎉 VideoCall: Stream added for participant:', participant.userId);
+        logger.info('🎥 Stream details:', {
+          videoTracks: participant.stream.getVideoTracks().length,
+          audioTracks: participant.stream.getAudioTracks().length,
+          streamId: participant.stream.id
+        });
         setRemoteParticipants(prev => {
           const existing = prev.find(p => p.userId === participant.userId);
-          if (existing) return prev;
+          if (existing) {
+            logger.warn(`⚠️ Participant ${participant.userId} already exists in remoteParticipants`);
+            return prev;
+          }
+          logger.info(`✅ Adding ${participant.userId} to remoteParticipants. Total will be: ${prev.length + 1}`);
           return [...prev, participant];
         });
       });
@@ -210,10 +219,18 @@ export default function VideoCall({ roomId, participants }: VideoCallProps) {
 
   // Update remote video elements when participants change
   useEffect(() => {
-    remoteParticipants.forEach((participant) => {
+    logger.info(`🔄 VideoCall: remoteParticipants changed. Count: ${remoteParticipants.length}`);
+    remoteParticipants.forEach((participant, index) => {
+      logger.info(`📹 Processing participant ${index + 1}: ${participant.userId}`);
       const videoElement = remoteVideoRefs.current.get(participant.userId);
       if (videoElement && participant.stream) {
+        logger.info(`✅ Setting srcObject for ${participant.userId}`);
         videoElement.srcObject = participant.stream;
+      } else {
+        logger.warn(`❌ Missing video element or stream for ${participant.userId}:`, {
+          hasVideoElement: !!videoElement,
+          hasStream: !!participant.stream
+        });
       }
     });
   }, [remoteParticipants]);

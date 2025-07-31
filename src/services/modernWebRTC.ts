@@ -50,8 +50,7 @@ export class ModernWebRTCService {
   private trustedFingerprints: Set<string> = new Set();
 
   constructor() {
-    // Initialize socket connection
-    this.initializeSocket();
+    // Don't initialize socket here - wait until we have config
     this.setupVisibilityHandler();
     this.setupUnloadHandler();
   }
@@ -109,7 +108,9 @@ export class ModernWebRTCService {
 
       this.socket.on('connect', () => {
         const transport = this.socket?.io?.engine?.transport?.name || 'unknown';
-        logger.info(`Socket connected for WebRTC using ${transport} transport`);
+        logger.info(`✅ Socket connected for WebRTC using ${transport} transport`);
+        logger.info(`🌍 Client origin: ${window.location.origin}`);
+        logger.info(`🔗 Server URL: ${webrtcServerUrl}`);
         
         // For Firefox, log successful connection method
         if (isFirefox) {
@@ -242,6 +243,11 @@ export class ModernWebRTCService {
     try {
       this.config = config;
 
+      // NOW initialize socket with proper config
+      if (!this.socket) {
+        this.initializeSocket();
+      }
+
       // Initialize PeerJS with MINIMAL configuration from working commit
       this.peer = new Peer(config.userId, {
         config: {
@@ -276,6 +282,17 @@ export class ModernWebRTCService {
 
         this.peer.on('connection', (conn) => {
           this.handleDataConnection(conn);
+        });
+
+        this.peer.on('disconnected', () => {
+          logger.warn('Peer disconnected, attempting to reconnect...');
+          this.connectionState = 'disconnected';
+          // Only attempt reconnection if not during tab visibility changes
+          if (document.visibilityState === 'visible') {
+            this.handleReconnection();
+          } else {
+            logger.info('Tab hidden during disconnect - will reconnect when tab becomes visible');
+          }
         });
 
         // Timeout after 10 seconds
@@ -777,6 +794,11 @@ export class ModernWebRTCService {
 
     try {
       logger.info(`🔄 Initiating call to user: ${userId}`);
+      logger.info(`Local stream info:`, {
+        videoTracks: this.localStream.getVideoTracks().length,
+        audioTracks: this.localStream.getAudioTracks().length,
+        streamId: this.localStream.id
+      });
       
       // Enhanced call options with encryption enforcement
       const callOptions = {
@@ -790,6 +812,12 @@ export class ModernWebRTCService {
       const call = this.peer.call(userId, this.localStream, callOptions);
       
       if (call) {
+        logger.info(`📞 PeerJS call object created for ${userId}`, {
+          peer: call.peer,
+          callType: call.type,
+          open: call.open
+        });
+        
         // Verify encryption is enabled before proceeding
         this.verifyCallEncryption(call);
         this.handleOutgoingCall(call, userId);
@@ -803,6 +831,8 @@ export class ModernWebRTCService {
   }
 
   private async handleIncomingCall(call: MediaConnection) {
+    logger.info(`📞 Incoming call from ${call.peer}`);
+    
     if (!this.localStream) {
       logger.warn('No local stream available for incoming call, attempting to start...');
       try {
@@ -821,17 +851,22 @@ export class ModernWebRTCService {
       return;
     }
 
-    logger.info(`📞 Incoming call from ${call.peer} - answering with encryption verification`);
+    logger.info(`🔄 Answering call from ${call.peer} with local stream:`, {
+      videoTracks: this.localStream?.getVideoTracks().length ?? 0,
+      audioTracks: this.localStream?.getAudioTracks().length ?? 0,
+      streamId: this.localStream?.id ?? 'no-stream'
+    });
     
     // Answer the call (PeerJS answer doesn't support metadata, only call does)
     if (this.localStream) {
       call.answer(this.localStream);
+      logger.info(`✅ Call answered for ${call.peer}`);
     }
     
     // Verify encryption for incoming call
     this.verifyCallEncryption(call);
     
-    // Handle the call stream
+    // Handle the call stream - THIS IS CRITICAL FOR RECEIVING REMOTE VIDEO
     this.handleCallStream(call);
     
     // Add connection monitoring
@@ -862,7 +897,15 @@ export class ModernWebRTCService {
   }
 
   private handleCallStream(call: MediaConnection) {
+    logger.info(`🎥 Setting up call stream handlers for ${call.peer}`);
+    
     call.on('stream', (remoteStream) => {
+      logger.info(`📹 Received remote stream from ${call.peer}:`, {
+        videoTracks: remoteStream.getVideoTracks().length,
+        audioTracks: remoteStream.getAudioTracks().length,
+        streamId: remoteStream.id
+      });
+      
       const participant: ParticipantStream = {
         userId: call.peer,
         stream: remoteStream,
@@ -870,15 +913,22 @@ export class ModernWebRTCService {
       };
 
       this.participants.set(call.peer, participant);
+      
+      logger.info(`✅ Calling onStreamAddedCallback for ${call.peer}`);
       this.onStreamAddedCallback?.(participant);
+      
+      if (!this.onStreamAddedCallback) {
+        logger.warn(`❌ No onStreamAddedCallback registered! Stream from ${call.peer} won't be displayed.`);
+      }
     });
 
     call.on('close', () => {
+      logger.info(`📞 Call closed with ${call.peer}`);
       this.handleParticipantLeft(call.peer);
     });
 
     call.on('error', (error) => {
-      logger.error('Call error:', error);
+      logger.error(`❌ Call error with ${call.peer}:`, error);
       this.handleParticipantLeft(call.peer);
     });
   }

@@ -122,29 +122,93 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
       // Add your production frontend URLs here
       'https://matcha-study.netlify.app',
       'https://matchaweb.org',
-      'https://matchaweb.netlify.app' // Add common Netlify URL patterns
+      'https://matchaweb.netlify.app',
+      'https://matcha.netlify.app',
+      'https://matcha-app.netlify.app',
+      'https://frenzyz-matcha.netlify.app',
+      // Add common deployment platforms
+      'https://matcha-frontend.vercel.app',
+      'https://matcha.vercel.app',
+      // Allow any Netlify/Vercel subdomain for this app
+      /^https:\/\/.*\.netlify\.app$/,
+      /^https:\/\/.*\.vercel\.app$/,
+      // Localhost for development
+      "http://localhost:5173", 
+      "http://localhost:3000",
+      "http://localhost:5174"
     ].filter(Boolean)
   : [
       "http://localhost:5173", 
       "http://localhost:3000",
-      "http://localhost:5174"
+      "http://localhost:5174",
+      // Also allow any localhost port for development
+      /^http:\/\/localhost:\d+$/
     ];
 
-app.use(cors({
-  origin: allowedOrigins,
-  methods: ["GET", "POST"],
-  credentials: true
-}));
+// Enhanced CORS configuration with origin validation
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Check exact matches
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    // Check regex patterns for Netlify/Vercel
+    const netlifyPattern = /^https:\/\/.*\.netlify\.app$/;
+    const vercelPattern = /^https:\/\/.*\.vercel\.app$/;
+    const localhostPattern = /^http:\/\/localhost:\d+$/;
+    
+    if (netlifyPattern.test(origin) || vercelPattern.test(origin) || localhostPattern.test(origin)) {
+      return callback(null, true);
+    }
+    
+    console.log(`❌ CORS blocked origin: ${origin}`);
+    return callback(new Error('Not allowed by CORS'));
+  },
+  methods: ["GET", "POST", "OPTIONS"],
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization', 'User-Agent', 'X-Requested-With'],
+  exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
+  preflightContinue: false,
+  optionsSuccessStatus: 200
+};
+
+app.use(cors(corsOptions));
+
+// Additional explicit CORS headers for problematic browsers
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  
+  // Validate origin and set CORS headers manually if needed
+  if (origin) {
+    const netlifyPattern = /^https:\/\/.*\.netlify\.app$/;
+    const vercelPattern = /^https:\/\/.*\.vercel\.app$/;
+    const localhostPattern = /^http:\/\/localhost:\d+$/;
+    
+    if (allowedOrigins.includes(origin) || 
+        netlifyPattern.test(origin) || 
+        vercelPattern.test(origin) || 
+        localhostPattern.test(origin)) {
+      res.header('Access-Control-Allow-Origin', origin);
+      res.header('Access-Control-Allow-Credentials', 'true');
+      res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
+      res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With, User-Agent');
+    }
+  }
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+  } else {
+    next();
+  }
+});
 
 const io = new Server(server, {
-  cors: {
-    origin: allowedOrigins,
-    methods: ["GET", "POST"],
-    credentials: true,
-    // Additional CORS headers for Firefox compatibility
-    allowedHeaders: ['Content-Type', 'Authorization', 'User-Agent'],
-    exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar']
-  },
+  cors: corsOptions,
   // Firefox-compatible transport configuration - start with polling
   transports: ['polling', 'websocket'],
   // Enhanced security configuration with Firefox compatibility
@@ -502,6 +566,18 @@ app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
     rooms: rooms.size,
+    timestamp: new Date().toISOString(),
+    cors: 'enabled',
+    origin: req.headers.origin || 'none'
+  });
+});
+
+// CORS test endpoint
+app.get('/cors-test', (req, res) => {
+  res.json({
+    message: 'CORS is working!',
+    origin: req.headers.origin,
+    userAgent: req.headers['user-agent'],
     timestamp: new Date().toISOString()
   });
 });
