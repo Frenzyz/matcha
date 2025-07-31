@@ -49,8 +49,13 @@ export default function VideoCall({ roomId, participants }: VideoCallProps) {
       webRTCService.onStreamAdded((participant) => {
         logger.info('Stream added for participant:', participant.userId);
         setRemoteParticipants(prev => {
+          // Strong deduplication check to prevent multiplying users
           const existing = prev.find(p => p.userId === participant.userId);
-          if (existing) return prev;
+          if (existing) {
+            logger.warn(`Participant ${participant.userId} already exists, not adding duplicate`);
+            return prev;
+          }
+          logger.info(`Adding new participant: ${participant.userId}`);
           return [...prev, participant];
         });
       });
@@ -61,11 +66,14 @@ export default function VideoCall({ roomId, participants }: VideoCallProps) {
       });
 
       webRTCService.onParticipantJoined((userId, userName) => {
-        logger.info(`Participant joined: ${userName} (${userId})`);
+        logger.info(`Participant joined notification: ${userName} (${userId})`);
+        // Don't add to UI here - let onStreamAdded handle it when video stream arrives
       });
 
       webRTCService.onParticipantLeft((userId) => {
         logger.info(`Participant left: ${userId}`);
+        // Remove from UI immediately
+        setRemoteParticipants(prev => prev.filter(p => p.userId !== userId));
       });
     };
 
