@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { Event } from '../types';
+import { Event } from '../types/index';
 import { useThemeStore } from '../store/themeStore';
 
 interface CalendarViewProps {

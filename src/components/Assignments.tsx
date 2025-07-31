@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
     import { Book, Clock, CheckCircle } from 'lucide-react';
     import { supabase } from '../config/supabase';
     import { useAuth } from '../context/AuthContext';
-    import { Assignment } from '../types';
+    import { Assignment } from '../types/index';
     import { logger } from '../utils/logger';
     import { useErrorHandler } from '../hooks/useErrorHandler';
     import { retryOperation } from '../config/supabase';

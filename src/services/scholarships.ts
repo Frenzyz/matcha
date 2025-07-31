@@ -1,5 +1,5 @@
 import { supabase } from '../config/supabase';
-import { Scholarship } from '../types';
+import { Scholarship } from '../types/index';
 
 export class ScholarshipService {
   static async fetchScholarships(major?: string): Promise<Scholarship[]> {

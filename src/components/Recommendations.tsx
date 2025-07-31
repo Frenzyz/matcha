@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { MapPin, Clock, Users, Trash2 } from 'lucide-react';
-import { Event } from '../types';
+import { Event } from '../types/index';
 import { useAuth } from '../context/AuthContext';
 import { CalendarService } from '../services/calendar';
 import LoadingSpinner from './LoadingSpinner';
@@ -65,7 +65,7 @@ export default function Recommendations() {
                 <span>{new Date(event.start_time).toLocaleString()}</span>
               </div>
               
-              {event.attendees > 0 && (
+              {event.attendees && event.attendees > 0 && (
                 <div className="flex items-center gap-2">
                   <Users size={16} />
                   <span>{event.attendees} attending</span>

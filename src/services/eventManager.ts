@@ -1,4 +1,4 @@
-import { Event } from '../types';
+import { Event } from '../types/index';
 import { supabase } from '../config/supabase';
 import { eventBus, CALENDAR_EVENTS } from './eventBus';
 import { logger } from '../utils/logger';

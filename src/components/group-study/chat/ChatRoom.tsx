@@ -73,7 +73,7 @@ export default function ChatRoom({ roomId, userId }: ChatRoomProps) {
         'Access-Control-Allow-Credentials': 'true'
       },
       // Cookie configuration for cross-origin compatibility
-      cookiePrefix: 'matcha-chat',
+      // cookiePrefix: 'matcha-chat',
       // Force polling initially, then upgrade to websocket
       upgrade: true,
       // Additional connection options
@@ -123,7 +123,9 @@ export default function ChatRoom({ roomId, userId }: ChatRoomProps) {
       if (err.message?.includes('cookie') || err.message?.includes('CORS')) {
         logger.warn('Cookie/CORS issue detected, attempting reconnection with different transport');
         // Try with polling only if websocket fails due to cookie issues
-        socketRef.current?.io.opts.transports = ['polling'];
+                  if (socketRef.current?.io.opts) {
+            socketRef.current.io.opts.transports = ['polling'];
+          }
       }
       setError('Failed to connect to chat server');
       logger.error('Chat socket connection error:', err);

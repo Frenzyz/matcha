@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Event } from '../../types';
+import { Event } from '../../types/index';
 
 export interface EventWithLayout extends Event {
   width: number;

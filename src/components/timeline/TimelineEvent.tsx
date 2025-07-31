@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { MapPin, Clock, Pen, Trash2, Save, X, Loader2 } from 'lucide-react';
-import { Event } from '../../types';
+import { Event } from '../../types/index';
 
 interface TimelineEventProps {
   event: Event & { width: number; left: number };

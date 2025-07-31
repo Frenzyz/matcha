@@ -1,6 +1,6 @@
 import React from 'react';
 import { format, isToday } from 'date-fns';
-import { Event } from '../../types';
+import { Event } from '../../types/index';
 
 interface CalendarGridProps {
   days: number[];

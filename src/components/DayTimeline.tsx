@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { format } from 'date-fns';
 import { X } from 'lucide-react';
-import { Event } from '../types';
+import { Event } from '../types/index';
 import TimeGrid from './timeline/TimeGrid';
 import TimelineEvent from './timeline/TimelineEvent';
 import { useEventLayout } from './timeline/useEventLayout';

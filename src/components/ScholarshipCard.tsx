@@ -1,6 +1,6 @@
 import React from 'react';
 import { Calendar, DollarSign, Award, BookOpen, ExternalLink } from 'lucide-react';
-import { Scholarship } from '../types';
+import { Scholarship } from '../types/index';
 import { useAuth } from '../context/AuthContext';
 import { ScholarshipService } from '../services/scholarships';
 import { formatCurrency } from '../utils/format';

@@ -1,5 +1,5 @@
 import { parseDate, addTimeToDate } from '../../utils/dateUtils';
-import { Event } from '../../types';
+import { Event } from '../../types/index';
 import { logger } from '../../utils/logger';
 
 interface EventCommand {

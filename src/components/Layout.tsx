@@ -26,7 +26,8 @@ export default function Layout({ children }: LayoutProps) {
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         <Navbar 
           toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} 
-          isSidebarOpen={isSidebarOpen} 
+          isSidebarOpen={isSidebarOpen}
+          onLogoClick={() => {}}
         />
         
         <div className="flex">
