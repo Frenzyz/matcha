@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../config/supabase';
-import VideoCall from './VideoCall';
+import VideoCallEasyRTC from './VideoCallEasyRTC';
 import ChatRoom from './chat/ChatRoom';
 import { ArrowLeft, Users, Trash2, Loader2 } from 'lucide-react';
 import { StudyRoom as StudyRoomType } from '../../types/study-room';
@@ -214,7 +214,7 @@ export default function StudyRoom({ roomId, onLeave }: StudyRoomProps) {
 
       <div className="flex-1 grid grid-cols-3 gap-4 p-4 min-h-0">
         <div className="col-span-2 min-h-0">
-          <VideoCall roomId={roomId} participants={participants} />
+                          <VideoCallEasyRTC roomId={roomId} participants={participants} />
         </div>
         <div className="col-span-1 min-h-0 flex flex-col">
           {user && <ChatRoom roomId={roomId} userId={user.id} />}

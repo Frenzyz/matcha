@@ -76,33 +76,37 @@ export class ModernWebRTCService {
       // Firefox-compatible Socket.IO configuration
       const isFirefox = navigator.userAgent.toLowerCase().includes('firefox');
       
+      // Generate session info for tracking
+      const timestamp = Date.now();
+      const sessionId = `${this.config?.userId}-${timestamp}-${Math.random().toString(36).substr(2, 9)}`;
+      const clientId = this.config?.userId || 'unknown';
+
       this.socket = io(webrtcServerUrl, {
-        // FIREFOX FIX: Start with polling for Firefox, websocket for others
-        transports: isFirefox ? ['polling', 'websocket'] : ['websocket', 'polling'],
-        timeout: 20000,
+        // FIREFOX FIX: Use polling only for Firefox to avoid connection instability
+        transports: isFirefox ? ['polling'] : ['websocket', 'polling'],
+        timeout: 30000, // Increased timeout for Firefox
         forceNew: false,
         reconnection: true,
-        reconnectionAttempts: 3,
-        reconnectionDelay: 2000,
-        reconnectionDelayMax: 5000,
+        reconnectionAttempts: 2, // Reduced to prevent spam
+        reconnectionDelay: 3000, // Increased delay
+        reconnectionDelayMax: 10000,
         // Enhanced configuration for cross-origin compatibility
         withCredentials: true,
         extraHeaders: {
-          'Access-Control-Allow-Credentials': 'true',
           'User-Agent': navigator.userAgent // Help server identify browser
         },
         // Firefox-specific transport configuration
-        upgrade: !isFirefox, // Disable upgrade for Firefox initially
-        rememberUpgrade: !isFirefox, // Don't remember upgrade for Firefox
+        upgrade: false, // Never upgrade for Firefox to maintain stability
+        rememberUpgrade: false, // Don't remember upgrade
         // Firefox WebSocket configuration
         forceBase64: isFirefox, // Force base64 encoding for Firefox
         timestampRequests: true, // Add timestamps to prevent caching issues
         // Add query to identify this specific client instance
         query: {
-          clientId: this.config?.userId || 'unknown',
-          timestamp: Date.now(),
+          clientId: clientId,
+          timestamp: timestamp,
           browser: isFirefox ? 'firefox' : 'other',
-          sessionId: `${this.config?.userId || 'unknown'}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+          sessionId: sessionId
         }
       });
 
