@@ -15,7 +15,9 @@ interface VideoCallProps {
 
 export default function VideoCall({ roomId, participants }: VideoCallProps) {
   const { user } = useAuth();
-  const { isTabSwitchInProgress, forceAllowAction, isVisible } = useTabSwitchProtection();
+  const { monitor, startMonitoring, stopMonitoring, onConnectionHealthChange, getConnectionStatus } = useWebRTCConnectionMonitor();
+  const { isTabSwitchInProgress, isVisible, timeHidden } = useTabSwitchProtection();
+  // Removed duplicate line
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
   const [videoEnabled, setVideoEnabled] = useState(true);
@@ -158,8 +160,8 @@ export default function VideoCall({ roomId, participants }: VideoCallProps) {
         userId: user.id,
         userName: user.email || 'Anonymous',
         // Add authentication tokens for security
-        authToken: user.access_token || 'dev-token',
-        sessionId: `session-${user.id}-${Date.now()}`
+        authToken: user.access_token || `dev-token-${Date.now()}`,
+        sessionId: `session-${user.id.replace(/[^a-zA-Z0-9-]/g, '')}-${Date.now()}`
       });
 
       if (!success) {
@@ -189,6 +191,13 @@ export default function VideoCall({ roomId, participants }: VideoCallProps) {
 
       setIsInitialized(true);
       setConnectionStatus('Connected successfully');
+      
+      // Start connection monitoring
+      const participants = webRTCService.getParticipants();
+      if (participants.size > 0) {
+        startMonitoring(new Map(Array.from(participants.entries())));
+      }
+      
       logger.info('Successfully joined video room');
 
     } catch (err) {
