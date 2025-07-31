@@ -1,11 +1,13 @@
 // Open-EasyRTC Server for Matcha Study Platform
-const express = require('express');
-const http = require('http');
-const socketIo = require('socket.io');
+import express from 'express';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
 const easyrtc = require('open-easyrtc');
 
 const app = express();
-const server = http.createServer(app);
+const server = createServer(app);
 
 // Configure CORS for production and development
 const allowedOrigins = process.env.NODE_ENV === 'production' 
@@ -72,7 +74,7 @@ const corsOptions = {
 };
 
 // Initialize Socket.IO with CORS
-const io = socketIo(server, {
+const io = new Server(server, {
   cors: corsOptions,
   transports: ['polling', 'websocket'],
   pingTimeout: 120000,
