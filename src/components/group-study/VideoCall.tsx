@@ -95,7 +95,10 @@ export default function VideoCall({ roomId, participants }: VideoCallProps) {
             webRTCService.initialize({
               roomId,
               userId: user.id,
-              userName: user.email || 'Anonymous'
+              userName: user.email || 'Anonymous',
+              // Add required authentication for production
+              authToken: user.access_token || `dev-token-${Date.now()}`,
+              sessionId: `session-${user.id.replace(/[^a-zA-Z0-9-]/g, '')}-${Date.now()}`
             }),
             new Promise<boolean>((_, reject) => 
               setTimeout(() => reject(new Error('Connection timeout')), 5000)
