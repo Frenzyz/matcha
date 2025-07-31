@@ -180,9 +180,8 @@ export class ModernWebRTCService {
           // Enforce secure transport protocols
           sdpSemantics: 'unified-plan', // Use unified plan for better security
           // Additional security constraints
-          offerExtmapAllowMixed: false, // Disable mixed extension maps for security
-          // DTLS fingerprint verification
-          iceCandidatePoolSize: 10
+          offerExtmapAllowMixed: false // Disable mixed extension maps for security
+          // DTLS fingerprint verification already configured above
         },
         // Enhanced PeerJS security settings
         debug: import.meta.env.DEV ? 2 : 0, // Disable debug in production
