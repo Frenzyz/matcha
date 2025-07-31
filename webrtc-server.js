@@ -225,20 +225,9 @@ io.on('connection', (socket) => {
       disconnectGracePeriod = null;
     }
     
-    // Don't immediately remove user if it might be tab switching
-    if (reason === 'transport close' || reason === 'ping timeout') {
-      console.log(`🔄 User ${socket.id} disconnected (${reason}) - giving grace period for reconnection`);
-      
-      disconnectGracePeriod = setTimeout(() => {
-        // Actually clean up the user after grace period
-        cleanupUserFromAllRooms(socket.id);
-        disconnectGracePeriod = null;
-      }, 60000); // 60 second grace period
-    } else {
-      // Immediate cleanup for intentional disconnects
-      console.log(`🚪 User ${socket.id} disconnected (${reason}) - immediate cleanup`);
-      cleanupUserFromAllRooms(socket.id);
-    }
+    // CRITICAL FIX: Always do immediate cleanup to prevent connection multiplication
+    console.log(`🚪 User ${socket.id} disconnected (${reason}) - immediate cleanup`);
+    cleanupUserFromAllRooms(socket.id);
   });
 
   socket.on('reconnect', () => {
@@ -296,31 +285,49 @@ io.on('connection', (socket) => {
       handleUserLeave(existingRoom, userId, socket);
     }
 
-    // Check if this user is already connected with a different socket
-    let existingSocketId = null;
-    for (const [socketId, mappedUserId] of userRooms.entries()) {
-      if (mappedUserId === roomId) {
-        const roomParticipants = rooms.get(roomId);
-        if (roomParticipants && roomParticipants.has(userId)) {
-          existingSocketId = roomParticipants.get(userId).socketId;
-          break;
+    // CRITICAL FIX: Check for existing user sessions more comprehensively
+    let roomParticipants = rooms.get(roomId) || new Map();
+    
+    // Check if this user is already in this specific room
+    if (roomParticipants.has(userId)) {
+      const existingParticipant = roomParticipants.get(userId);
+      const existingSocketId = existingParticipant.socketId;
+      
+      if (existingSocketId !== socket.id) {
+        console.log(`🔄 User ${sanitizedUserId} already in room - replacing old socket ${existingSocketId} with ${socket.id}`);
+        
+        // Disconnect the old socket
+        const oldSocket = io.sockets.sockets.get(existingSocketId);
+        if (oldSocket) {
+          oldSocket.leave(roomId);
+          oldSocket.disconnect(true);
+        }
+        
+        // Update userRooms mapping for old socket
+        for (const [oldUserId, oldRoomId] of userRooms.entries()) {
+          if (oldUserId === userId && oldRoomId === roomId) {
+            userRooms.delete(oldUserId);
+            break;
+          }
         }
       }
     }
-
-    // If user already exists with different socket, disconnect the old one
-    if (existingSocketId && existingSocketId !== socket.id) {
-      console.log(`🔄 User ${sanitizedUserId} reconnecting - disconnecting old socket ${existingSocketId}`);
-      const oldSocket = io.sockets.sockets.get(existingSocketId);
-      if (oldSocket) {
-        oldSocket.disconnect(true);
+    
+    // Also check for this user in other rooms and clean up
+    for (const [existingUserId, existingRoomId] of userRooms.entries()) {
+      if (existingUserId === userId && existingRoomId !== roomId) {
+        console.log(`🧹 User ${sanitizedUserId} was in room ${existingRoomId}, cleaning up`);
+        handleUserLeave(existingRoomId, userId, socket);
+        userRooms.delete(existingUserId);
       }
     }
 
     if (!rooms.has(roomId)) {
       rooms.set(roomId, new Map());
+      roomParticipants = rooms.get(roomId);
+    } else {
+      roomParticipants = rooms.get(roomId);
     }
-    const roomParticipants = rooms.get(roomId);
     
     // Remove any existing instances of this userId (regardless of socket)
     if (roomParticipants.has(userId)) {
@@ -358,6 +365,16 @@ io.on('connection', (socket) => {
     
     socket.leave(roomId);
     handleUserLeave(roomId, userId, socket);
+  });
+
+  socket.on('user-leaving', (data) => {
+    const { userId, roomId, reason } = data;
+    console.log(`👋 User ${userId} explicitly leaving room ${roomId} (${reason})`);
+    
+    // Immediate cleanup for explicit leave
+    socket.leave(roomId);
+    handleUserLeave(roomId, userId, socket);
+    userRooms.delete(userId);
   });
 
   socket.on('room-message', (data) => {

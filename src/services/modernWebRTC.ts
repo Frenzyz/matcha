@@ -53,19 +53,22 @@ export class ModernWebRTCService {
     // Initialize socket connection
     this.initializeSocket();
     this.setupVisibilityHandler();
+    this.setupUnloadHandler();
   }
 
   private initializeSocket() {
     try {
-      // CRITICAL: Prevent multiple socket instances
-      if (this.socket && this.socket.connected) {
-        logger.info('Socket already connected, reusing existing connection');
-        return;
-      }
-
+      // CRITICAL: Prevent multiple socket instances more aggressively
       if (this.socket) {
-        this.socket.disconnect();
-        this.socket = null;
+        if (this.socket.connected) {
+          logger.info('Socket already connected, reusing existing connection');
+          return;
+        } else {
+          logger.info('Cleaning up disconnected socket before creating new one');
+          this.socket.removeAllListeners();
+          this.socket.disconnect();
+          this.socket = null;
+        }
       }
 
       // Connect to WebRTC server using environment variable
@@ -99,7 +102,8 @@ export class ModernWebRTCService {
         query: {
           clientId: this.config?.userId || 'unknown',
           timestamp: Date.now(),
-          browser: isFirefox ? 'firefox' : 'other'
+          browser: isFirefox ? 'firefox' : 'other',
+          sessionId: `${this.config?.userId || 'unknown'}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
         }
       });
 
@@ -475,6 +479,42 @@ export class ModernWebRTCService {
     
     // Re-setup all other event handlers
     this.setupSocketEventHandlers(false);
+  }
+
+  private setupUnloadHandler() {
+    // Handle page unload to properly disconnect user
+    const handleUnload = () => {
+      if (this.socket && this.socket.connected && this.config) {
+        logger.info('Page unloading - sending explicit leave signal');
+        this.socket.emit('user-leaving', {
+          userId: this.config.userId,
+          roomId: this.config.roomId,
+          reason: 'page-unload'
+        });
+        // Force immediate disconnect
+        this.socket.disconnect();
+      }
+    };
+
+    window.addEventListener('beforeunload', handleUnload);
+    window.addEventListener('unload', handleUnload);
+    
+    // Also handle visibility API for better mobile support
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        // On mobile, page might be killed without beforeunload
+        setTimeout(() => {
+          if (document.visibilityState === 'hidden' && this.socket && this.config) {
+            logger.info('Page hidden for extended time - disconnecting');
+            this.socket.emit('user-leaving', {
+              userId: this.config.userId,
+              roomId: this.config.roomId,
+              reason: 'tab-hidden-extended'
+            });
+          }
+        }, 30000); // 30 seconds of being hidden
+      }
+    });
   }
 
   private setupSocketEventHandlers(isFirefox: boolean): void {
@@ -1525,6 +1565,7 @@ export class ModernWebRTCService {
 // Enhanced singleton instance to prevent multiple WebRTC services
 let webRTCServiceInstance: ModernWebRTCService | null = null;
 let isInitializing = false;
+let connectionId: string | null = null;
 
 export const webRTCService = (() => {
   if (isInitializing) {
