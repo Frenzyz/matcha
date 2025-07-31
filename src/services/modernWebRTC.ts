@@ -62,10 +62,10 @@ export class ModernWebRTCService {
       this.socket = io(webrtcServerUrl, {
         transports: ['websocket', 'polling'],
         timeout: 20000,
-        forceNew: true,
+        forceNew: false, // CRITICAL: Don't force new connections
         reconnection: true,
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000,
+        reconnectionAttempts: 3, // Reduced to prevent loops
+        reconnectionDelay: 2000, // Increased delay
         reconnectionDelayMax: 5000,
         // Enhanced configuration to handle cookies and cross-origin issues
         withCredentials: true,
@@ -303,42 +303,63 @@ export class ModernWebRTCService {
   }
 
   private handleReconnection(): void {
-    if (this.isDestroyed || this.connectionRetryCount >= this.maxRetries) return;
+    if (this.isDestroyed || this.connectionRetryCount >= this.maxRetries) {
+      logger.warn(`Reconnection aborted - destroyed: ${this.isDestroyed}, retries: ${this.connectionRetryCount}/${this.maxRetries}`);
+      return;
+    }
 
-    const delay = 2000 + (this.connectionRetryCount * 1000);
+    // Prevent multiple reconnection attempts
+    if (this.reconnectionInProgress) {
+      logger.info('Reconnection already in progress, skipping');
+      return;
+    }
+
+    this.reconnectionInProgress = true;
+    const delay = 3000 + (this.connectionRetryCount * 2000); // Longer delays
+    
     setTimeout(async () => {
-      if (this.isDestroyed) return;
+      if (this.isDestroyed) {
+        this.reconnectionInProgress = false;
+        return;
+      }
 
-      // Check if peer is destroyed - if so, create a new one
-      if (!this.peer || this.peer.destroyed) {
-        logger.info('Peer destroyed, creating new connection...');
-        await this.createNewConnectionAfterDestroy();
-      } else if (this.peer.disconnected) {
-        logger.info('Attempting to reconnect existing peer...');
-        try {
-          this.peer.reconnect();
-        } catch (error) {
-          logger.warn('Reconnect failed, creating new connection:', error);
+      try {
+        // Check if peer is destroyed - if so, create a new one
+        if (!this.peer || this.peer.destroyed) {
+          logger.info('Peer destroyed, creating new connection...');
           await this.createNewConnectionAfterDestroy();
+        } else if (this.peer.disconnected) {
+          logger.info('Attempting to reconnect existing peer...');
+          try {
+            this.peer.reconnect();
+          } catch (error) {
+            logger.warn('Reconnect failed, creating new connection:', error);
+            await this.createNewConnectionAfterDestroy();
+          }
         }
+      } catch (error) {
+        logger.error('Error during reconnection:', error);
+      } finally {
+        this.reconnectionInProgress = false;
       }
     }, delay);
   }
+
+  private reconnectionInProgress: boolean = false;
 
   private async createNewConnectionAfterDestroy(): Promise<void> {
     if (!this.config || this.isDestroyed) return;
 
     try {
-      // Get the base user ID (without any previous reconnect suffixes)
+      // CRITICAL: Don't create reconnect IDs that multiply - use original ID
       const baseUserId = this.getBaseUserId(this.config.userId);
-      const newUserId = `${baseUserId}-reconnect-${Date.now()}`;
       
-      logger.info(`Creating new peer with ID: ${newUserId} (base: ${baseUserId})`);
+      logger.info(`Recreating peer connection with original ID: ${baseUserId}`);
       
-      // Update config with new ID
+      // Use original config with base user ID (no reconnect suffix)
       const newConfig = { 
         ...this.config, 
-        userId: newUserId 
+        userId: baseUserId  // Use clean base ID
       };
       
       // Clear old peer completely
@@ -350,7 +371,7 @@ export class ModernWebRTCService {
       // Reset connection state
       this.connectionRetryCount++;
       
-      // Initialize with new ID
+      // Initialize with clean ID
       await this.initializeWithRetry(newConfig, 0);
       
     } catch (error) {
@@ -919,6 +940,9 @@ export class ModernWebRTCService {
     logger.info('🧹 WebRTC Service: Destroying all connections and resources');
     this.isDestroyed = true;
     
+    // Stop any ongoing reconnection attempts
+    this.reconnectionInProgress = false;
+    
     // Stop connection monitoring
     if (this.connectionMonitorInterval) {
       clearInterval(this.connectionMonitorInterval);
@@ -976,6 +1000,7 @@ export class ModernWebRTCService {
     this.connectionState = 'new';
     this.networkQuality = 'unknown';
     this.connectionRetryCount = 0;
+    this.reconnectionInProgress = false;
     this.config = null;
 
     logger.info('✅ WebRTC Service: Complete destruction finished');
@@ -1232,4 +1257,22 @@ export class ModernWebRTCService {
 }
 
 // Export singleton instance
-export const webRTCService = new ModernWebRTCService();
+// Singleton instance to prevent multiple WebRTC services
+let webRTCServiceInstance: ModernWebRTCService | null = null;
+
+export const webRTCService = (() => {
+  if (!webRTCServiceInstance) {
+    webRTCServiceInstance = new ModernWebRTCService();
+  }
+  return webRTCServiceInstance;
+})();
+
+// Clean up singleton on page unload
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => {
+    if (webRTCServiceInstance) {
+      webRTCServiceInstance.destroy();
+      webRTCServiceInstance = null;
+    }
+  });
+}
