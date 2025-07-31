@@ -67,7 +67,18 @@ export class ModernWebRTCService {
         reconnectionAttempts: 5,
         reconnectionDelay: 1000,
         reconnectionDelayMax: 5000,
-        maxReconnectionAttempts: 5
+        maxReconnectionAttempts: 5,
+        // Enhanced configuration to handle cookies and cross-origin issues
+        withCredentials: true,
+        extraHeaders: {
+          'Access-Control-Allow-Credentials': 'true'
+        },
+        // Cookie configuration for cross-origin compatibility
+        cookiePrefix: 'matcha-io',
+        // Force polling initially, then upgrade to websocket
+        upgrade: true,
+        // Additional security headers
+        rememberUpgrade: true
       });
 
       this.socket.on('connect', () => {
@@ -96,6 +107,14 @@ export class ModernWebRTCService {
       });
 
       this.socket.on('connect_error', (error) => {
+        // Handle specific cookie and CORS errors
+        if (error.message?.includes('cookie') || error.message?.includes('CORS') || error.message?.includes('__cf_bm')) {
+          logger.warn('Cookie/CORS issue detected in WebRTC socket, attempting fallback');
+          // Try with polling only if websocket fails due to cookie issues
+          if (this.socket?.io.opts) {
+            this.socket.io.opts.transports = ['polling'];
+          }
+        }
         logger.error('Socket connection error:', error);
       });
 
