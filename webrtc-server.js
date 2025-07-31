@@ -140,15 +140,21 @@ const io = new Server(server, {
   cors: {
     origin: allowedOrigins,
     methods: ["GET", "POST"],
-    credentials: true
+    credentials: true,
+    // Additional CORS headers for Firefox compatibility
+    allowedHeaders: ['Content-Type', 'Authorization', 'User-Agent'],
+    exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar']
   },
-  transports: ['websocket', 'polling'],
-  // Enhanced security configuration
-  pingTimeout: 60000,
-  pingInterval: 25000,
+  // Firefox-compatible transport configuration - start with polling
+  transports: ['polling', 'websocket'],
+  // Enhanced security configuration with Firefox compatibility
+  pingTimeout: 120000, // Increased for Firefox
+  pingInterval: 30000, // Increased interval for Firefox
   // Connection limits
   maxHttpBufferSize: 1e6, // 1MB
   allowEIO3: false, // Disable legacy Engine.IO
+  // Firefox-specific configuration
+  upgradeTimeout: 30000, // Longer upgrade timeout for Firefox
   // Cookie configuration to handle Cloudflare and cross-origin issues
   cookie: {
     name: 'io',
@@ -157,15 +163,19 @@ const io = new Server(server, {
     secure: process.env.NODE_ENV === 'production',
     domain: process.env.NODE_ENV === 'production' ? undefined : 'localhost'
   },
-  // Additional security
+  // Additional security with Firefox compatibility
   serveClient: false,
   allowRequest: (req, callback) => {
     // Validate origin
     const origin = req.headers.origin;
     const isOriginAllowed = allowedOrigins.includes(origin);
     
+    // Get browser info for logging
+    const userAgent = req.headers['user-agent'] || '';
+    const isFirefox = userAgent.toLowerCase().includes('firefox');
+    
     if (!isOriginAllowed && process.env.NODE_ENV === 'production') {
-      console.log(`🚨 Rejected connection from unauthorized origin: ${origin}`);
+      console.log(`🚨 Rejected connection from unauthorized origin: ${origin} (${isFirefox ? 'Firefox' : 'Other'})`);
       return callback('Origin not allowed', false);
     }
     
@@ -173,8 +183,8 @@ const io = new Server(server, {
     const clientIP = req.socket.remoteAddress;
     const ipHash = createHash('sha256').update(clientIP).digest('hex');
     
-    // Log connection attempt
-    console.log(`🔒 Connection attempt from IP hash: ${ipHash.substring(0, 16)}...`);
+    // Enhanced logging with browser detection
+    console.log(`🔒 Connection attempt from IP hash: ${ipHash.substring(0, 16)}... (${isFirefox ? 'Firefox' : 'Other'})`);
     
     callback(null, true);
   }

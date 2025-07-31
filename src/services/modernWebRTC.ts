@@ -70,33 +70,48 @@ export class ModernWebRTCService {
 
       // Connect to WebRTC server using environment variable
       const webrtcServerUrl = import.meta.env.VITE_WEBRTC_SERVER_URL || 'http://localhost:3001';
+      
+      // Firefox-compatible Socket.IO configuration
+      const isFirefox = navigator.userAgent.toLowerCase().includes('firefox');
+      
       this.socket = io(webrtcServerUrl, {
-        transports: ['websocket', 'polling'],
+        // FIREFOX FIX: Start with polling for Firefox, websocket for others
+        transports: isFirefox ? ['polling', 'websocket'] : ['websocket', 'polling'],
         timeout: 20000,
-        forceNew: false, // CRITICAL: Don't force new connections
+        forceNew: false,
         reconnection: true,
-        reconnectionAttempts: 3, // Reduced to prevent loops
-        reconnectionDelay: 2000, // Increased delay
+        reconnectionAttempts: 3,
+        reconnectionDelay: 2000,
         reconnectionDelayMax: 5000,
-        // Enhanced configuration to handle cookies and cross-origin issues
+        // Enhanced configuration for cross-origin compatibility
         withCredentials: true,
         extraHeaders: {
-          'Access-Control-Allow-Credentials': 'true'
+          'Access-Control-Allow-Credentials': 'true',
+          'User-Agent': navigator.userAgent // Help server identify browser
         },
-        // Cookie configuration for cross-origin compatibility (handled by server)
-        // Force polling initially, then upgrade to websocket
-        upgrade: true,
-        // Additional security headers
-        rememberUpgrade: true,
+        // Firefox-specific transport configuration
+        upgrade: !isFirefox, // Disable upgrade for Firefox initially
+        rememberUpgrade: !isFirefox, // Don't remember upgrade for Firefox
+        // Firefox WebSocket configuration
+        forceBase64: isFirefox, // Force base64 encoding for Firefox
+        timestampRequests: true, // Add timestamps to prevent caching issues
         // Add query to identify this specific client instance
         query: {
           clientId: this.config?.userId || 'unknown',
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          browser: isFirefox ? 'firefox' : 'other'
         }
       });
 
       this.socket.on('connect', () => {
-        logger.info('Socket connected for WebRTC');
+        const transport = this.socket?.io?.engine?.transport?.name || 'unknown';
+        logger.info(`Socket connected for WebRTC using ${transport} transport`);
+        
+        // For Firefox, log successful connection method
+        if (isFirefox) {
+          logger.info(`🦊 Firefox successfully connected via ${transport}`);
+        }
+        
         // Rejoin room if we were previously connected
         if (this.config) {
           logger.info('Rejoining room after reconnection');
@@ -121,6 +136,27 @@ export class ModernWebRTCService {
       });
 
       this.socket.on('connect_error', (error) => {
+        logger.error('Socket connection error:', error);
+        
+        // Enhanced Firefox-specific error handling
+        if (isFirefox) {
+          logger.error('🦊 Firefox connection error detected:', error.message);
+          
+          // Check for WebSocket-specific errors in Firefox
+          if (error.message?.includes('websocket') || error.message?.includes('wss://')) {
+            logger.info('🦊 Firefox WebSocket error - switching to polling-only mode');
+            
+            // Disconnect and recreate with polling-only
+            if (this.socket) {
+              this.socket.disconnect();
+              
+              setTimeout(() => {
+                this.createFirefoxFallbackConnection(webrtcServerUrl);
+              }, 1000);
+            }
+          }
+        }
+        
         // Handle specific cookie and CORS errors
         if (error.message?.includes('cookie') || error.message?.includes('CORS') || error.message?.includes('__cf_bm')) {
           logger.warn('Cookie/CORS issue detected in WebRTC socket, attempting fallback');
@@ -129,7 +165,11 @@ export class ModernWebRTCService {
             this.socket.io.opts.transports = ['polling'];
           }
         }
-        logger.error('Socket connection error:', error);
+        
+        // Handle transport close errors
+        if (error.message?.includes('transport close') || error.message?.includes('xhr poll error')) {
+          logger.warn('Transport error detected - attempting reconnection with different strategy');
+        }
       });
 
       this.socket.on('user-joined', (data: { userId: string; userName: string }) => {
@@ -399,6 +439,87 @@ export class ModernWebRTCService {
   }
 
   private reconnectionInProgress: boolean = false;
+
+  private createFirefoxFallbackConnection(webrtcServerUrl: string): void {
+    logger.info('🦊 Creating Firefox fallback connection with polling-only transport');
+    
+    this.socket = io(webrtcServerUrl, {
+      transports: ['polling'], // Polling only for maximum Firefox compatibility
+      timeout: 30000,
+      forceNew: true,
+      reconnection: true,
+      reconnectionAttempts: 2,
+      reconnectionDelay: 3000,
+      withCredentials: true,
+      upgrade: false, // Never upgrade to WebSocket
+      forceBase64: true, // Force base64 encoding
+      timestampRequests: true,
+      query: {
+        clientId: this.config?.userId || 'unknown',
+        timestamp: Date.now(),
+        browser: 'firefox-fallback'
+      }
+    });
+    
+    // Setup basic event handlers for fallback connection
+    this.socket.on('connect', () => {
+      logger.info('🦊 Firefox fallback connection established via polling');
+      if (this.config) {
+        this.joinRoom();
+      }
+    });
+    
+    this.socket.on('connect_error', (error) => {
+      logger.error('🦊 Firefox fallback connection also failed:', error);
+    });
+    
+    // Re-setup all other event handlers
+    this.setupSocketEventHandlers(false);
+  }
+
+  private setupSocketEventHandlers(isFirefox: boolean): void {
+    if (!this.socket) return;
+    
+    // Re-setup user-joined handler
+    this.socket.on('user-joined', (data: { userId: string; userName: string }) => {
+      logger.info('🆕 User joined room:', data);
+      this.onParticipantJoinedCallback?.(data.userId, data.userName);
+      
+      setTimeout(async () => {
+        if (!this.peer || this.peer.destroyed) {
+          logger.warn(`Cannot initiate call to ${data.userId}: peer not ready`);
+          return;
+        }
+        
+        if (!this.localStream) {
+          logger.warn(`Cannot initiate call to ${data.userId}: no local stream, attempting to start...`);
+          try {
+            await this.startLocalStream(true, true);
+          } catch (error) {
+            logger.error('Failed to start local stream:', error);
+            return;
+          }
+        }
+        
+        logger.info(`🔄 Existing user initiating call to new user: ${data.userId}`);
+        this.initiateCall(data.userId);
+      }, 1000);
+    });
+    
+    this.socket.on('user-left', (data: { userId: string }) => {
+      logger.info('User left room:', data);
+      this.handleParticipantLeft(data.userId);
+    });
+    
+    // Setup other event handlers...
+    this.socket.on('room-participants', (participants: { userId: string; userName: string }[]) => {
+      logger.info('Received existing room participants:', participants);
+      participants.forEach(p => {
+        this.onParticipantJoinedCallback?.(p.userId, p.userName);
+        this.initiateCall(p.userId);
+      });
+    });
+  }
 
   private verifyCallEncryption(call: MediaConnection): void {
     // Verify that the call will use encryption
