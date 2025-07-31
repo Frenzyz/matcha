@@ -116,6 +116,9 @@ function createSession(userId, roomId) {
 }
 
 // Configure CORS origins based on environment
+console.log(`🌍 Environment: NODE_ENV = ${process.env.NODE_ENV}`);
+console.log(`🔗 Frontend URL: FRONTEND_URL = ${process.env.FRONTEND_URL}`);
+
 const allowedOrigins = process.env.NODE_ENV === 'production' 
   ? [
       process.env.FRONTEND_URL,
@@ -145,27 +148,49 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
       /^http:\/\/localhost:\d+$/
     ];
 
+console.log(`📋 Configured CORS allowed origins:`, allowedOrigins.filter(o => typeof o === 'string'));
+
 // Enhanced CORS configuration with origin validation
 const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
-    // Check exact matches
-    if (allowedOrigins.includes(origin)) {
+    console.log(`🔍 CORS checking origin: ${origin}`);
+    
+    // TEMPORARY FIX: Explicitly allow matchaweb.org
+    if (origin === 'https://matchaweb.org') {
+      console.log(`✅ CORS allowed temporary fix: ${origin}`);
       return callback(null, true);
     }
     
-    // Check regex patterns for Netlify/Vercel
+    // Check against all allowed origins (both strings and regex patterns)
+    for (const allowedOrigin of allowedOrigins) {
+      if (typeof allowedOrigin === 'string') {
+        if (allowedOrigin === origin) {
+          console.log(`✅ CORS allowed exact match: ${origin}`);
+          return callback(null, true);
+        }
+      } else if (allowedOrigin instanceof RegExp) {
+        if (allowedOrigin.test(origin)) {
+          console.log(`✅ CORS allowed regex match: ${origin} matches ${allowedOrigin}`);
+          return callback(null, true);
+        }
+      }
+    }
+    
+    // Additional patterns for development
     const netlifyPattern = /^https:\/\/.*\.netlify\.app$/;
     const vercelPattern = /^https:\/\/.*\.vercel\.app$/;
     const localhostPattern = /^http:\/\/localhost:\d+$/;
     
     if (netlifyPattern.test(origin) || vercelPattern.test(origin) || localhostPattern.test(origin)) {
+      console.log(`✅ CORS allowed additional pattern: ${origin}`);
       return callback(null, true);
     }
     
     console.log(`❌ CORS blocked origin: ${origin}`);
+    console.log(`📋 Available allowed origins:`, allowedOrigins.filter(o => typeof o === 'string'));
     return callback(new Error('Not allowed by CORS'));
   },
   methods: ["GET", "POST", "OPTIONS"],
