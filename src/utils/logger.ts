@@ -1,4 +1,4 @@
-type LogLevel = 'info' | 'warn' | 'error';
+type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 class Logger {
   private isDevelopment = import.meta.env.DEV;
@@ -38,6 +38,9 @@ class Logger {
     const prefix = `[${timestamp}]`;
 
     switch (level) {
+      case 'debug':
+        console.debug(prefix, message, ...args);
+        break;
       case 'info':
         console.log(prefix, message, ...args);
         break;
@@ -48,6 +51,10 @@ class Logger {
         console.error(prefix, message, ...args);
         break;
     }
+  }
+
+  debug(message: string, ...args: any[]) {
+    this.log('debug', message, ...args);
   }
 
   info(message: string, ...args: any[]) {

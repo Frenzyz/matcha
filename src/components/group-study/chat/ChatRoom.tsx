@@ -66,7 +66,22 @@ export default function ChatRoom({ roomId, userId }: ChatRoomProps) {
     const webrtcServerUrl = import.meta.env.VITE_WEBRTC_SERVER_URL || 'http://localhost:3001';
     socketRef.current = io(webrtcServerUrl, {
       transports: ['websocket', 'polling'],
-      timeout: 20000
+      timeout: 20000,
+      // Enhanced configuration to handle cookies and cross-origin issues
+      withCredentials: true,
+      extraHeaders: {
+        'Access-Control-Allow-Credentials': 'true'
+      },
+      // Cookie configuration for cross-origin compatibility
+      cookiePrefix: 'matcha-chat',
+      // Force polling initially, then upgrade to websocket
+      upgrade: true,
+      // Additional connection options
+      rememberUpgrade: true,
+      // Reconnection settings
+      reconnection: true,
+      reconnectionAttempts: 3,
+      reconnectionDelay: 1000
     });
 
     socketRef.current.on('connect', async () => {
@@ -104,6 +119,12 @@ export default function ChatRoom({ roomId, userId }: ChatRoomProps) {
     });
 
     socketRef.current.on('connect_error', (err) => {
+      // Handle specific cookie and CORS errors
+      if (err.message?.includes('cookie') || err.message?.includes('CORS')) {
+        logger.warn('Cookie/CORS issue detected, attempting reconnection with different transport');
+        // Try with polling only if websocket fails due to cookie issues
+        socketRef.current?.io.opts.transports = ['polling'];
+      }
       setError('Failed to connect to chat server');
       logger.error('Chat socket connection error:', err);
     });

@@ -149,6 +149,14 @@ const io = new Server(server, {
   // Connection limits
   maxHttpBufferSize: 1e6, // 1MB
   allowEIO3: false, // Disable legacy Engine.IO
+  // Cookie configuration to handle Cloudflare and cross-origin issues
+  cookie: {
+    name: 'io',
+    httpOnly: true,
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    domain: process.env.NODE_ENV === 'production' ? undefined : 'localhost'
+  },
   // Additional security
   serveClient: false,
   allowRequest: (req, callback) => {
