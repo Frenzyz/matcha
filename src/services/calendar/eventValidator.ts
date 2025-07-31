@@ -1,4 +1,4 @@
-import { Event } from '../../types';
+import { Event } from '../../types/index';
 import { isValid, parseISO } from 'date-fns';
 import { logger } from '../../utils/logger';
 

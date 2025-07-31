@@ -27,9 +27,9 @@ export default async function handler(req: Request, res: Response) {
     const data = await response.text();
 
     // Parse and regenerate the calendar to ensure it's valid
-    const calendar = new CalendarService('UNCC Canvas Calendar');
-    const events = calendar.parseICalData(data);
-    calendar.addEvents(events);
+    const calendar = new CalendarService();
+    // const events = calendar.parseICalData(data);
+    // calendar.addEvents(events);
 
     res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="canvas-calendar.ics"');

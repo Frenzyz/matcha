@@ -3,6 +3,20 @@ export * from './assignment';
 export * from './scholarship';
 export * from './study-room';
 
+export interface PersonalInfo {
+  first_name?: string;
+  last_name?: string;
+  phone?: string;
+  date_of_birth?: string;
+}
+
+export interface AcademicInfo {
+  major?: string;
+  year?: string;
+  gpa?: number;
+  expected_graduation?: string;
+}
+
 export interface UserProfile {
   id: string;
   email: string;
@@ -14,6 +28,8 @@ export interface UserProfile {
   theme_color?: string;
   setup_completed?: boolean;
   google_calendar_token?: string;
+  academic_info?: AcademicInfo;
+  personal_info?: PersonalInfo;
   beta_features?: {
     [key: string]: boolean;
   };

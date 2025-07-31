@@ -1,6 +1,6 @@
 import { logger } from '../../utils/logger';
 import { addDays, format, startOfDay, endOfDay } from 'date-fns';
-import { EventType } from '../../types';
+import { EventType } from '../../types/index';
 
 interface ParsedCommand {
   action: 'add' | 'view' | 'update' | 'delete' | 'query';

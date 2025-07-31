@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Event } from '../../types';
+import { Event } from '../../types/index';
 import TodoItem from './TodoItem';
 import { Edit2, Trash2, Save, X } from 'lucide-react';
 

@@ -1,4 +1,4 @@
-import { Assignment } from '../types';
+import { Assignment } from '../types/index';
 import { supabase } from '../config/supabase';
 import { logger } from '../utils/logger';
 

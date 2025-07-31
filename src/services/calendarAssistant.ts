@@ -1,5 +1,5 @@
 import { supabase } from '../config/supabase';
-import { Event } from '../types';
+import { Event } from '../types/index';
 import { logger } from '../utils/logger';
 import { parseCommandResponse } from './llm/parser';
 import { llmService } from './llm';

@@ -3,7 +3,7 @@ import { ExternalLink, Search, GraduationCap, Plus } from 'lucide-react';
 import { useThemeStore } from '../store/themeStore';
 import { useUser } from '../hooks/useUser';
 import { ScholarshipService } from '../services/scholarships';
-import { Scholarship } from '../types';
+import { Scholarship } from '../types/index';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 import HostScholarshipForm from '../components/HostScholarshipForm';

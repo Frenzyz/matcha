@@ -1,4 +1,4 @@
-import { Event } from '../types';
+import { Event } from '../types/index';
 import { fetchUnccEvents } from './scrapers/unccEvents';
 import { fetchHireANinerEvents } from './scrapers/hireANinerEvents';
 

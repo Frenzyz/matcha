@@ -112,10 +112,10 @@ export default function StudyRoomList({ rooms, loading, onJoinRoom, onRoomDelete
                   <div className="flex items-center gap-2 mb-1">
                     <h3 className="font-semibold text-lg">{room.name}</h3>
                     {isCreator && (
-                      <Crown className="w-4 h-4 text-yellow-500" title="You created this room" />
+                      <Crown className="w-4 h-4 text-yellow-500" />
                     )}
                     {isAdmin && !isCreator && (
-                      <Shield className="w-4 h-4 text-blue-500" title="Admin view" />
+                      <Shield className="w-4 h-4 text-blue-500" />
                     )}
                   </div>
                   <p className="text-sm text-gray-500 dark:text-gray-400">{room.subject}</p>

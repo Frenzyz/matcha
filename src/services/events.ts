@@ -1,4 +1,4 @@
-import { Event } from '../types';
+import { Event } from '../types/index';
 import { supabase } from '../config/supabase';
 import { logger } from '../utils/logger';
 import { retryOperation } from '../utils/retryOperation';

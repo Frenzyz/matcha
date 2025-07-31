@@ -3,7 +3,7 @@ import { useThemeStore } from '../store/themeStore';
 import { useAuth } from '../context/AuthContext';
 import { useUserData } from '../context/UserDataProvider';
 import { EventService } from '../services/events';
-import { Event } from '../types';
+import { Event } from '../types/index';
 import Calendar from '../components/Calendar';
 import TodoList from '../components/TodoList/TodoList';
 import { Switch } from '../components/ui/Switch';

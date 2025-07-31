@@ -1,6 +1,6 @@
 import React from 'react';
 import { MapPin, Clock, Users } from 'lucide-react';
-import { Event } from '../types';
+import { Event } from '../types/index';
 
 interface CalendarEventProps {
   event: Event;
@@ -47,7 +47,7 @@ export default function CalendarEvent({ event }: CalendarEventProps) {
                 <span>{event.location}</span>
               </div>
             )}
-            {event.attendees > 0 && (
+            {event.attendees && event.attendees > 0 && (
               <div className="flex items-center gap-2">
                 <Users size={16} />
                 <span>{event.attendees} attending</span>

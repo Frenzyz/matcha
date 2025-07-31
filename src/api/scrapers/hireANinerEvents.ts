@@ -1,4 +1,4 @@
-import { Event } from '../../types';
+import { Event } from '../../types/index';
 import { JSDOM } from 'jsdom';
 
 export async function fetchHireANinerEvents(): Promise<Event[]> {

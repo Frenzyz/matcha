@@ -1,5 +1,5 @@
 import { supabase } from '../../config/supabase';
-import { Event } from '../../types';
+import { Event } from '../../types/index';
 import { logger } from '../../utils/logger';
 import { eventBus, CALENDAR_EVENTS } from '../eventBus';
 import { parseISO, startOfWeek, endOfWeek, isWithinInterval } from 'date-fns';

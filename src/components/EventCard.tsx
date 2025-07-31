@@ -1,6 +1,6 @@
 import React from 'react';
 import { MapPin, Clock, Users } from 'lucide-react';
-import { Event } from '../types';
+import { Event } from '../types/index';
 
 interface EventCardProps {
   event: Event;
@@ -45,7 +45,7 @@ export default function EventCard({ event }: EventCardProps) {
           </div>
         )}
         
-        {event.attendees > 0 && (
+        {event.attendees && event.attendees > 0 && (
           <div className="flex items-center gap-2">
             <Users className="flex-shrink-0" size={16} />
             <span>{event.attendees} attending</span>

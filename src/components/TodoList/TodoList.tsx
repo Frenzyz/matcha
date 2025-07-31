@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Event } from '../../types';
+import { Event } from '../../types/index';
 import TodoCategory from './TodoCategory';
 import { Plus, Calendar } from 'lucide-react';
 import { addDays, isWithinInterval, startOfDay, endOfDay } from 'date-fns';

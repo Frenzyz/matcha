@@ -1,5 +1,5 @@
 import { supabase } from '../config/supabase';
-import { Event } from '../types';
+import { Event } from '../types/index';
 
 export async function fetchEvents(): Promise<Event[]> {
   try {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ScholarshipService } from '../services/scholarships';
-import { Scholarship } from '../types';
+import { Scholarship } from '../types/index';
 import ScholarshipCard from './ScholarshipCard';
 import ScholarshipFilter from './ScholarshipFilter';
 import LoadingSpinner from './LoadingSpinner';

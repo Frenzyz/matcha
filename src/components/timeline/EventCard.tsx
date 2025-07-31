@@ -1,7 +1,7 @@
 import React from 'react';
 import { MapPin, Pen, Trash2, Save, X as Close } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
-import { Event } from '../../types';
+import { Event } from '../../types/index';
 
 interface EventCardProps {
   event: Event;

@@ -1,4 +1,4 @@
-import { Event } from '../../types';
+import { Event } from '../../types/index';
 
 export async function fetchUnccEvents(): Promise<Event[]> {
   try {
