@@ -121,8 +121,8 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
       process.env.FRONTEND_URL,
       // Add your production frontend URLs here
       'https://matcha-study.netlify.app',
-      'https://your-frontend.vercel.app',
-      'https://matchaweb.org' // Add your actual Netlify URL here
+      'https://matchaweb.org',
+      'https://matchaweb.netlify.app' // Add common Netlify URL patterns
     ].filter(Boolean)
   : [
       "http://localhost:5173", 
@@ -195,16 +195,41 @@ io.on('connection', (socket) => {
   // Connection security audit
   console.log(`Security audit - Socket: ${socket.id}, IP: ${socket.ipHash}...`);
   
-  // Set connection timeout
+  // Set connection timeout - increased for tab switching
   const connectionTimeout = setTimeout(() => {
     if (socket.connected) {
       console.log(`⏰ Connection timeout for ${socket.id}`);
       socket.disconnect(true);
     }
-  }, 300000); // 5 minutes timeout
+  }, 600000); // 10 minutes timeout to handle tab switching
   
-  socket.on('disconnect', () => {
+  // Handle disconnection with grace period for tab switching
+  let disconnectGracePeriod = null;
+  
+  socket.on('disconnect', (reason) => {
     clearTimeout(connectionTimeout);
+    
+    // Don't immediately remove user if it might be tab switching
+    if (reason === 'transport close' || reason === 'ping timeout') {
+      console.log(`🔄 User ${socket.id} disconnected (${reason}) - giving grace period for reconnection`);
+      
+      disconnectGracePeriod = setTimeout(() => {
+        // Actually clean up the user after grace period
+        cleanupUserFromAllRooms(socket.id);
+      }, 60000); // 60 second grace period
+    } else {
+      // Immediate cleanup for intentional disconnects
+      cleanupUserFromAllRooms(socket.id);
+    }
+  });
+
+  socket.on('reconnect', () => {
+    // Clear grace period if user reconnects
+    if (disconnectGracePeriod) {
+      clearTimeout(disconnectGracePeriod);
+      disconnectGracePeriod = null;
+      console.log(`✅ User ${socket.id} reconnected within grace period`);
+    }
   });
 
   socket.on('join-room', (data) => {
