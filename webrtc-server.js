@@ -209,6 +209,12 @@ io.on('connection', (socket) => {
   socket.on('disconnect', (reason) => {
     clearTimeout(connectionTimeout);
     
+    // Clear any existing grace period to prevent double cleanup
+    if (disconnectGracePeriod) {
+      clearTimeout(disconnectGracePeriod);
+      disconnectGracePeriod = null;
+    }
+    
     // Don't immediately remove user if it might be tab switching
     if (reason === 'transport close' || reason === 'ping timeout') {
       console.log(`🔄 User ${socket.id} disconnected (${reason}) - giving grace period for reconnection`);
@@ -216,9 +222,11 @@ io.on('connection', (socket) => {
       disconnectGracePeriod = setTimeout(() => {
         // Actually clean up the user after grace period
         cleanupUserFromAllRooms(socket.id);
+        disconnectGracePeriod = null;
       }, 60000); // 60 second grace period
     } else {
       // Immediate cleanup for intentional disconnects
+      console.log(`🚪 User ${socket.id} disconnected (${reason}) - immediate cleanup`);
       cleanupUserFromAllRooms(socket.id);
     }
   });
@@ -363,19 +371,37 @@ io.on('connection', (socket) => {
     });
   });
 
-  socket.on('disconnect', () => {
-    console.log(`User disconnected: ${socket.id}`);
-    
-    // Find and remove user from all rooms
-    for (const [userId, roomId] of userRooms.entries()) {
+  // Enhanced event handlers for better tab switching support
+  socket.on('tab-hidden', (data) => {
+    const { userId, roomId } = data;
+    console.log(`📱 User ${userId} tab hidden in room ${roomId} - maintaining connection`);
+    // Mark user as potentially tab switching to avoid premature cleanup
+    if (disconnectGracePeriod) {
+      clearTimeout(disconnectGracePeriod);
+      disconnectGracePeriod = null;
+      console.log(`⏸️ Cancelled disconnect grace period for ${socket.id} (tab switch)`);
+    }
+  });
+
+  socket.on('tab-visible', (data) => {
+    const { userId, roomId } = data;
+    console.log(`👁️ User ${userId} tab visible in room ${roomId} - connection maintained`);
+    // Rejoin room to ensure everything is still connected
+    if (roomId && userId) {
       const roomParticipants = rooms.get(roomId);
-      if (roomParticipants) {
-        const participant = roomParticipants.get(userId);
-        if (participant && participant.socketId === socket.id) {
-          handleUserLeave(roomId, userId, socket);
-          break;
-        }
+      if (roomParticipants && roomParticipants.has(userId)) {
+        console.log(`✅ User ${userId} successfully returned to room ${roomId}`);
       }
+    }
+  });
+
+  socket.on('user-leaving', (data) => {
+    const { userId, roomId, reason } = data;
+    console.log(`👋 User ${userId} explicitly leaving room ${roomId} (${reason})`);
+    // Cancel any grace periods since user is intentionally leaving
+    if (disconnectGracePeriod) {
+      clearTimeout(disconnectGracePeriod);
+      disconnectGracePeriod = null;
     }
   });
 
@@ -394,6 +420,23 @@ io.on('connection', (socket) => {
         console.log(`Room ${roomId} deleted (empty)`);
       } else {
         console.log(`Room ${roomId} now has ${roomParticipants.size} participants`);
+      }
+    }
+  }
+
+  function cleanupUserFromAllRooms(socketId) {
+    console.log(`🧹 Cleaning up user with socket ${socketId} from all rooms`);
+    
+    // Find and remove user from all rooms
+    for (const [userId, roomId] of userRooms.entries()) {
+      const roomParticipants = rooms.get(roomId);
+      if (roomParticipants) {
+        const participant = roomParticipants.get(userId);
+        if (participant && participant.socketId === socketId) {
+          console.log(`🗑️ Removing user ${userId} from room ${roomId}`);
+          handleUserLeave(roomId, userId, socket);
+          break;
+        }
       }
     }
   }

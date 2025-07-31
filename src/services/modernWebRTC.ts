@@ -243,7 +243,12 @@ export class ModernWebRTCService {
         this.peer.on('disconnected', () => {
           logger.warn('Peer disconnected, attempting to reconnect...');
           this.connectionState = 'disconnected';
-          this.handleReconnection();
+          // Only attempt reconnection if not during tab visibility changes
+          if (document.visibilityState === 'visible') {
+            this.handleReconnection();
+          } else {
+            logger.info('Tab hidden during disconnect - will reconnect when tab becomes visible');
+          }
         });
       });
 
@@ -254,55 +259,39 @@ export class ModernWebRTCService {
   }
 
   private getOptimalIceServers(): RTCIceServer[] {
-    // Secure ICE server configuration with authentication
+    // Optimized ICE server configuration - limited to 4 servers to prevent slow discovery
     const secureIceServers: RTCIceServer[] = [
-      // Primary Google STUN servers (encrypted)
+      // Primary Google STUN server (most reliable)
       { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' },
-      { urls: 'stun:stun2.l.google.com:19302' },
-      { urls: 'stun:stun3.l.google.com:19302' },
-      { urls: 'stun:stun4.l.google.com:19302' },
       
-      // Cloudflare secure STUN servers
+      // Cloudflare STUN server as backup
       { urls: 'stun:stun.cloudflare.com:3478' },
       
-      // Mozilla secure STUN servers
-      { urls: 'stun:stun.services.mozilla.com' },
-      
-      // Secure TURN servers for NAT traversal (with authentication)
+      // Primary TURN server for NAT traversal
       {
         urls: 'turn:openrelay.metered.ca:80',
         username: 'openrelayproject',
         credential: 'openrelayproject'
       },
+      
+      // Secondary TURN server for redundancy
       {
         urls: 'turn:openrelay.metered.ca:443',
         username: 'openrelayproject', 
         credential: 'openrelayproject'
-      },
-      {
-        urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-        username: 'openrelayproject',
-        credential: 'openrelayproject'
-      },
-      
-      // Additional secure TURN servers for redundancy
-      {
-        urls: 'turn:relay1.expressturn.com:3478',
-        username: 'ef3I8SXBZZ8CAHEO72',
-        credential: 'nKJHA3bPkmCVlVI'
       }
     ];
 
-    // Filter to ensure only secure connections in production
+    // In production, use even fewer servers for optimal performance
     if (import.meta.env.PROD) {
-      return secureIceServers.filter(server => {
-        // Only allow STUN/TURN servers with authentication or from trusted providers
-        return server.urls.includes('stun:stun.l.google.com') ||
-               server.urls.includes('stun:stun.cloudflare.com') ||
-               server.urls.includes('stun:stun.services.mozilla.com') ||
-               (server.urls.includes('turn:') && server.username && server.credential);
-      });
+      return [
+        { urls: 'stun:stun.l.google.com:19302' },
+        {
+          urls: 'turn:openrelay.metered.ca:443',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        }
+      ];
     }
 
     return secureIceServers;
@@ -340,12 +329,56 @@ export class ModernWebRTCService {
     if (this.isDestroyed || this.connectionRetryCount >= this.maxRetries) return;
 
     const delay = 2000 + (this.connectionRetryCount * 1000);
-    setTimeout(() => {
-      if (this.peer && this.peer.disconnected && !this.isDestroyed) {
-        logger.info('Attempting to reconnect peer...');
-        this.peer.reconnect();
+    setTimeout(async () => {
+      if (this.isDestroyed) return;
+
+      // Check if peer is destroyed - if so, create a new one
+      if (!this.peer || this.peer.destroyed) {
+        logger.info('Peer destroyed, creating new connection...');
+        await this.createNewConnectionAfterDestroy();
+      } else if (this.peer.disconnected) {
+        logger.info('Attempting to reconnect existing peer...');
+        try {
+          this.peer.reconnect();
+        } catch (error) {
+          logger.warn('Reconnect failed, creating new connection:', error);
+          await this.createNewConnectionAfterDestroy();
+        }
       }
     }, delay);
+  }
+
+  private async createNewConnectionAfterDestroy(): Promise<void> {
+    if (!this.config || this.isDestroyed) return;
+
+    try {
+      // Generate a new unique user ID to avoid collisions
+      const originalUserId = this.config.userId;
+      const newUserId = `${originalUserId}-reconnect-${Date.now()}`;
+      
+      logger.info(`Creating new peer with ID: ${newUserId} (was: ${originalUserId})`);
+      
+      // Update config with new ID
+      const newConfig = { 
+        ...this.config, 
+        userId: newUserId 
+      };
+      
+      // Clear old peer completely
+      if (this.peer) {
+        this.peer.destroy();
+        this.peer = null;
+      }
+      
+      // Reset connection state
+      this.connectionRetryCount++;
+      
+      // Initialize with new ID
+      await this.initializeWithRetry(newConfig, 0);
+      
+    } catch (error) {
+      logger.error('Failed to create new connection after destroy:', error);
+    }
   }
 
   private startConnectionMonitoring(): void {
@@ -714,32 +747,153 @@ export class ModernWebRTCService {
   }
 
   private setupVisibilityHandler() {
-    // Prevent disconnection when tab becomes hidden
+    // Enhanced tab switching protection
     this.visibilityChangeHandler = () => {
       if (document.visibilityState === 'hidden') {
         logger.info('Tab became hidden - maintaining WebRTC connection');
-        // Keep connection alive, don't disconnect
-      } else if (document.visibilityState === 'visible') {
-        logger.info('Tab became visible - WebRTC connection active');
-        // Reconnect if disconnected while hidden
-        if (this.config && this.socket && !this.socket.connected) {
-          logger.info('Reconnecting socket after tab became visible');
-          this.socket.connect();
+        // Mark that we're in a tab switch to prevent unnecessary reconnection attempts
+        if (this.socket) {
+          this.socket.emit('tab-hidden', { 
+            userId: this.config?.userId,
+            roomId: this.config?.roomId 
+          });
         }
+      } else if (document.visibilityState === 'visible') {
+        logger.info('Tab became visible - checking connection status');
+        
+        // Give the page a moment to fully load before checking connections
+        setTimeout(() => {
+          this.handleTabReturn();
+        }, 1000);
       }
     };
 
     document.addEventListener('visibilitychange', this.visibilityChangeHandler);
 
-    // Handle page unload to properly cleanup
-    const beforeUnloadHandler = () => {
-      if (!this.isDestroyed) {
-        logger.info('Page unloading - cleaning up WebRTC');
+    // Enhanced page unload handling
+    const beforeUnloadHandler = (event: BeforeUnloadEvent) => {
+      if (!this.isDestroyed && this.config) {
+        logger.info('Page unloading - cleaning up WebRTC gracefully');
+        
+        // Emit leave-room to server before cleanup
+        if (this.socket && this.socket.connected) {
+          this.socket.emit('user-leaving', {
+            userId: this.config.userId,
+            roomId: this.config.roomId,
+            reason: 'page-unload'
+          });
+        }
+        
+        // Quick cleanup without waiting
         this.leaveRoom();
       }
     };
     
     window.addEventListener('beforeunload', beforeUnloadHandler);
+
+    // Handle focus events for additional reliability
+    const focusHandler = () => {
+      if (this.config && document.visibilityState === 'visible') {
+        logger.info('Window focused - ensuring connection health');
+        setTimeout(() => {
+          this.checkConnectionHealth();
+        }, 500);
+      }
+    };
+
+    window.addEventListener('focus', focusHandler);
+  }
+
+  private async handleTabReturn(): Promise<void> {
+    if (!this.config) return;
+
+    try {
+      // Check socket connection first
+      if (this.socket && !this.socket.connected) {
+        logger.info('Socket disconnected while tab hidden - reconnecting...');
+        this.socket.connect();
+        
+        // Wait for socket to connect before proceeding
+        await new Promise((resolve) => {
+          const checkConnection = () => {
+            if (this.socket?.connected) {
+              resolve(true);
+            } else {
+              setTimeout(checkConnection, 100);
+            }
+          };
+          checkConnection();
+          
+          // Timeout after 5 seconds
+          setTimeout(() => resolve(false), 5000);
+        });
+      }
+
+      // Check peer connection
+      if (!this.peer || this.peer.destroyed || this.peer.disconnected) {
+        logger.info('Peer connection lost while tab hidden - attempting to restore...');
+        await this.handleReconnection();
+      }
+
+      // Rejoin room if needed
+      if (this.socket && this.socket.connected) {
+        this.socket.emit('tab-visible', { 
+          userId: this.config.userId,
+          roomId: this.config.roomId 
+        });
+      }
+
+    } catch (error) {
+      logger.error('Error handling tab return:', error);
+    }
+  }
+
+  private async checkConnectionHealth(): Promise<void> {
+    if (!this.config) return;
+
+    const issues: string[] = [];
+
+    // Check socket health
+    if (!this.socket || !this.socket.connected) {
+      issues.push('socket');
+    }
+
+    // Check peer health
+    if (!this.peer || this.peer.destroyed || this.peer.disconnected) {
+      issues.push('peer');
+    }
+
+    // Check local stream
+    if (!this.localStream || this.localStream.getTracks().length === 0) {
+      issues.push('media');
+    }
+
+    if (issues.length > 0) {
+      logger.warn(`Connection health issues detected: ${issues.join(', ')}`);
+      
+      // Attempt to fix issues automatically
+      if (issues.includes('socket') && this.socket) {
+        this.socket.connect();
+      }
+      
+      if (issues.includes('peer')) {
+        await this.handleReconnection();
+      }
+      
+      if (issues.includes('media')) {
+        logger.info('Attempting to restore media stream...');
+        try {
+          const stream = await this.startLocalStream(true, true);
+          if (stream) {
+            logger.info('Media stream restored successfully');
+          }
+        } catch (error) {
+          logger.warn('Failed to restore media stream:', error);
+        }
+      }
+    } else {
+      logger.info('Connection health check passed');
+    }
   }
 
   destroy() {
