@@ -118,6 +118,7 @@ export class ModernWebRTCService {
 
       this.socket.on('user-joined', (data: { userId: string; userName: string }) => {
         logger.info('User joined room:', data);
+        // Only notify about new participant (don't duplicate with onStreamAdded)
         this.onParticipantJoinedCallback?.(data.userId, data.userName);
         this.initiateCall(data.userId);
       });
@@ -135,17 +136,17 @@ export class ModernWebRTCService {
         this.handleAnswer(data.from, data.answer);
       });
 
-      // CRITICAL: Handle existing participants when joining room
+      // Handle existing participants when joining room (without duplicate notifications)
       this.socket.on('room-participants', (participants: Array<{ userId: string; userName: string }>) => {
         logger.info('Received existing participants:', participants);
-        // Connect to all existing participants
+        // Only initiate calls to existing participants - don't notify UI yet
+        // The onStreamAdded callback will handle UI updates when streams are received
         participants.forEach(participant => {
-          logger.info(`Connecting to existing participant: ${participant.userName} (${participant.userId})`);
-          this.onParticipantJoinedCallback?.(participant.userId, participant.userName);
-          // Initiate call to existing participant
+          logger.info(`Initiating call to existing participant: ${participant.userName} (${participant.userId})`);
+          // Small delay to ensure peer connection is ready
           setTimeout(() => {
             this.initiateCall(participant.userId);
-          }, 500); // Small delay to ensure peer connection is ready
+          }, 500);
         });
       });
 
@@ -559,6 +560,12 @@ export class ModernWebRTCService {
 
     logger.info(`Joining room: ${this.config.roomId} as ${this.config.userName} (${this.config.userId})`);
     
+    // Clear any existing participants to prevent duplicates on reconnection
+    if (this.participants.size > 0) {
+      logger.info('Clearing existing participants before rejoining room');
+      this.participants.clear();
+    }
+    
     this.socket.emit('join-room', {
       roomId: this.config.roomId,
       userId: this.config.userId,
@@ -674,12 +681,16 @@ export class ModernWebRTCService {
   }
 
   private handleParticipantLeft(userId: string) {
+    logger.info(`Cleaning up participant: ${userId}`);
     const participant = this.participants.get(userId);
     if (participant) {
       participant.connection?.close();
       this.participants.delete(userId);
       this.onStreamRemovedCallback?.(userId);
       this.onParticipantLeftCallback?.(userId);
+      logger.info(`Participant ${userId} cleaned up successfully`);
+    } else {
+      logger.warn(`Participant ${userId} not found for cleanup`);
     }
   }
 
