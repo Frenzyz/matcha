@@ -6,6 +6,7 @@ import RecordRTC from 'recordrtc';
 import { webRTCService, ParticipantStream } from '../../services/modernWebRTC';
 import { useTabSwitchProtection } from '../../hooks/useTabVisibility';
 import { SecurityBadge } from '../SecurityStatus';
+import { forceMediaCleanup, quickMediaCleanup } from '../../utils/mediaCleanup';
 
 interface VideoCallProps {
   roomId: string;
@@ -14,7 +15,7 @@ interface VideoCallProps {
 
 export default function VideoCall({ roomId, participants }: VideoCallProps) {
   const { user } = useAuth();
-  const { isTabSwitchInProgress, isVisible } = useTabSwitchProtection();
+  const { isTabSwitchInProgress, forceAllowAction, isVisible } = useTabSwitchProtection();
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
   const [videoEnabled, setVideoEnabled] = useState(true);
@@ -66,25 +67,34 @@ export default function VideoCall({ roomId, participants }: VideoCallProps) {
     setupWebRTCService();
 
     return () => {
-      // Prevent cleanup during tab switching to avoid false disconnections
+      // Check if this is a tab switch vs legitimate component unmount
       if (isTabSwitchInProgress()) {
-        logger.info('VideoCall cleanup prevented due to tab switch');
+        logger.info('📱 VideoCall cleanup prevented - tab switch detected');
+        quickMediaCleanup(); // Light cleanup for tab switches
         return;
       }
 
-      // Only cleanup when component actually unmounts or roomId/user changes
+      // This is a legitimate component unmount - full cleanup
       if (hasRequestedMedia) {
-        logger.info('VideoCall cleanup triggered - legitimate unmount');
-        webRTCService.leaveRoom();
-        if (localStream) {
-          localStream.getTracks().forEach(track => track.stop());
-        }
-        if (screenStream) {
-          screenStream.getTracks().forEach(track => track.stop());
-        }
+        logger.info('🚪 VideoCall cleanup triggered - legitimate unmount');
+        
+        // Use comprehensive cleanup utility
+        forceMediaCleanup({
+          stopAllTracks: true,
+          clearVideoElements: false, // Let component handle its own elements
+          destroyWebRTC: false, // Don't destroy service here, let parent handle it
+          logDetails: false // Reduce log spam
+        }).catch(error => {
+          logger.warn('Error during VideoCall cleanup:', error);
+        });
+
+        // Component-specific cleanup
         if (recorderRef.current) {
           recorderRef.current.stopRecording();
         }
+        
+        // Leave WebRTC room
+        webRTCService.leaveRoom();
       }
     };
   }, [roomId, user, isTabSwitchInProgress]); // Added isTabSwitchInProgress dependency

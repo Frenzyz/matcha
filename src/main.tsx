@@ -4,7 +4,11 @@ import { GoogleOAuthProvider } from '@react-oauth/google';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 import { logger } from './utils/logger';
+import { setupGlobalMediaTracking } from './utils/mediaCleanup';
 import './index.css';
+
+// Setup global media tracking for better cleanup
+setupGlobalMediaTracking();
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
