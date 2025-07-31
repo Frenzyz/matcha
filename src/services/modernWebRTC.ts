@@ -238,61 +238,19 @@ export class ModernWebRTCService {
   }
 
   async initialize(config: WebRTCConfig): Promise<boolean> {
-    // Validate authentication first
-    if (!this.validateAuthentication(config)) {
-      throw new Error('WebRTC authentication validation failed');
-    }
-
-    const result = await this.initializeWithRetry(config, 0);
-    
-    if (result) {
-      // Start security monitoring after successful initialization
-      this.startSecurityMonitoring();
-      logger.info('🔒 WebRTC security monitoring activated');
-    }
-
-    return result;
-  }
-
-  private async initializeWithRetry(config: WebRTCConfig, retryCount: number): Promise<boolean> {
+    // Simple initialization like in working commit - no complex retry logic
     try {
       this.config = config;
-      this.connectionRetryCount = retryCount;
 
-      // Enhanced ICE servers for better connectivity
-      const iceServers = this.getOptimalIceServers();
-
-      // Initialize PeerJS with enhanced security configuration
+      // Initialize PeerJS with MINIMAL configuration from working commit
       this.peer = new Peer(config.userId, {
         config: {
-          iceServers,
-          iceCandidatePoolSize: 4, // Reduced for faster connection
-          iceTransportPolicy: 'all', // Allow all transport types
-          bundlePolicy: 'max-bundle', // Bundle all media into single transport
-          rtcpMuxPolicy: 'require', // Require RTCP multiplexing for security
-          // CRITICAL: Enforce DTLS encryption for all connections
-          certificates: undefined, // Use browser-generated certificates (DTLS)
-          // Enforce secure transport protocols
-          sdpSemantics: 'unified-plan', // Use unified plan for better security
-          // Additional security constraints
-          offerExtmapAllowMixed: false, // Disable mixed extension maps for security
-          // Optimization for faster connections
-          iceGatheringTimeout: 5000, // Limit ICE gathering time
-          // ENCRYPTION ENFORCEMENT
-          mandatory: {
-            'googIPv6': false, // Disable IPv6 for consistency
-            'googDscp': true, // Enable DSCP marking
-            'googCpuOveruseDetection': true, // Enable CPU overuse detection
-          },
-          optional: [
-            { 'googSuspendBelowMinBitrate': true },
-            { 'googCombinedAudioVideoBwe': true },
-            { 'googScreencastMinBitrate': 300 }
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' }
           ]
-        },
-        // Enhanced PeerJS security settings
-        debug: import.meta.env.DEV ? 2 : 0, // Disable debug in production
-        secure: true // Enforce secure connections when available
+        }
       });
 
       return new Promise((resolve, reject) => {
@@ -301,26 +259,15 @@ export class ModernWebRTCService {
           return;
         }
 
-        // Set connection timeout based on network quality
-        const timeout = this.getConnectionTimeout();
-        const timeoutId = setTimeout(() => {
-          logger.warn(`Peer connection timeout after ${timeout}ms`);
-          this.handleConnectionFailure(reject, retryCount);
-        }, timeout);
-
         this.peer.on('open', (id) => {
-          clearTimeout(timeoutId);
           logger.info('Peer connection opened with ID:', id);
-          this.connectionState = 'connected';
-          this.startConnectionMonitoring();
           this.joinRoom();
           resolve(true);
         });
 
         this.peer.on('error', (error) => {
-          clearTimeout(timeoutId);
           logger.error('Peer error:', error);
-          this.handleConnectionFailure(reject, retryCount, error);
+          reject(error);
         });
 
         this.peer.on('call', (call) => {
@@ -331,44 +278,27 @@ export class ModernWebRTCService {
           this.handleDataConnection(conn);
         });
 
-        this.peer.on('disconnected', () => {
-          logger.warn('Peer disconnected, attempting to reconnect...');
-          this.connectionState = 'disconnected';
-          // Only attempt reconnection if not during tab visibility changes
-          if (document.visibilityState === 'visible') {
-            this.handleReconnection();
-          } else {
-            logger.info('Tab hidden during disconnect - will reconnect when tab becomes visible');
-          }
-        });
+        // Timeout after 10 seconds
+        setTimeout(() => {
+          reject(new Error('Peer connection timeout'));
+        }, 10000);
       });
 
     } catch (error) {
       logger.error('Failed to initialize WebRTC:', error);
-      return this.handleConnectionFailure(Promise.reject, retryCount, error);
+      return false;
     }
   }
 
-  private getOptimalIceServers(): RTCIceServer[] {
-    // Minimal ICE server configuration for fastest discovery
-    // Using only 2 servers maximum for immediate peer visibility
-    const minimalIceServers: RTCIceServer[] = [
-      // Single reliable STUN server
-      { urls: 'stun:stun.l.google.com:19302' },
-      
-      // Secure TURN server for NAT traversal with TLS
-      {
-        urls: [
-          'turns:openrelay.metered.ca:443?transport=tcp', // TURNS (TLS)
-          'turn:openrelay.metered.ca:443'  // Fallback TURN
-        ],
-        username: 'openrelayproject',
-        credential: 'openrelayproject'
-      }
-    ];
+  // Method removed - using simple initialize instead
 
-    // Use same minimal configuration in all environments for consistency
-    return minimalIceServers;
+  private getOptimalIceServers(): RTCIceServer[] {
+    // ULTRA-MINIMAL configuration from working commit - only essential servers
+    return [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' }
+    ];
   }
 
   private getConnectionTimeout(): number {
@@ -380,24 +310,7 @@ export class ModernWebRTCService {
     }
   }
 
-  private async handleConnectionFailure(
-    rejectFn: (reason?: any) => void, 
-    retryCount: number, 
-    error?: any
-  ): Promise<boolean> {
-    if (retryCount < this.maxRetries) {
-      const delay = this.retryDelay * Math.pow(2, retryCount); // Exponential backoff
-      logger.info(`Retrying connection in ${delay}ms (attempt ${retryCount + 1}/${this.maxRetries})`);
-      
-      await new Promise(resolve => setTimeout(resolve, delay));
-      return this.initializeWithRetry(this.config!, retryCount + 1);
-    } else {
-      const errorMessage = error?.message || 'Max connection retries exceeded';
-      logger.error(errorMessage);
-      rejectFn(new Error(errorMessage));
-      return false;
-    }
-  }
+  // Method removed - using simple initialization
 
   private handleReconnection(): void {
     if (this.isDestroyed || this.connectionRetryCount >= this.maxRetries) {
@@ -614,7 +527,7 @@ export class ModernWebRTCService {
       this.connectionRetryCount++;
       
       // Initialize with clean ID
-      await this.initializeWithRetry(newConfig, 0);
+      await this.initialize(newConfig);
       
     } catch (error) {
       logger.error('Failed to create new connection after destroy:', error);
@@ -681,8 +594,22 @@ export class ModernWebRTCService {
 
   async startLocalStream(video: boolean = true, audio: boolean = true): Promise<MediaStream | null> {
     try {
-      const constraints = this.getAdaptiveMediaConstraints(video, audio);
-      const stream = await this.acquireMediaWithFallback(constraints);
+      // Simple media constraints like in working commit
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: video ? {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          facingMode: 'user'
+        } : false,
+        audio: audio ? {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 2,
+          sampleRate: 48000,
+          sampleSize: 16
+        } : false
+      });
 
       this.localStream = stream;
       return stream;
