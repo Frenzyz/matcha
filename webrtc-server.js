@@ -279,22 +279,30 @@ io.on('connection', (socket) => {
     
     console.log(`🔒 Secure join: ${sanitizedUserId} (${sanitizedUserName}) → room ${sanitizedRoomId}`);
     
-    // Leave any existing room
+    // CRITICAL FIX: Clean up any existing instances of this user first
     const existingRoom = userRooms.get(userId);
     if (existingRoom) {
       socket.leave(existingRoom);
       handleUserLeave(existingRoom, userId, socket);
     }
 
-    // Join new room
-    socket.join(roomId);
-    userRooms.set(userId, roomId);
-    
-    // Add to room participants
+    // Also check if this user exists in the target room with different socket
     if (!rooms.has(roomId)) {
       rooms.set(roomId, new Map());
     }
     const roomParticipants = rooms.get(roomId);
+    
+    // Remove any existing instances of this userId (regardless of socket)
+    if (roomParticipants.has(userId)) {
+      console.log(`🧹 Removing existing instance of user ${sanitizedUserId} from room ${sanitizedRoomId}`);
+      roomParticipants.delete(userId);
+    }
+
+    // Join new room
+    socket.join(roomId);
+    userRooms.set(userId, roomId);
+    
+    // Add to room participants with new socket info
     roomParticipants.set(userId, {
       socketId: socket.id,
       userName,
