@@ -29,13 +29,13 @@ export default function StudyRoom({ roomId, onLeave }: StudyRoomProps) {
       loadRoom();
       const subscription = subscribeToRoomUpdates();
       return () => {
-        // Prevent unsubscribing during tab switches
+        // Only unsubscribe if this is not a tab switch
         if (!isTabSwitchInProgress()) {
           subscription.unsubscribe();
         }
       };
     }
-  }, [user, isTabSwitchInProgress]);
+  }, [user]); // Remove isTabSwitchInProgress from deps to prevent re-renders
 
   // Enhanced leave function that handles both protection and legitimate user actions
   const handleLeave = () => {

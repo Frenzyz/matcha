@@ -135,6 +135,20 @@ export class ModernWebRTCService {
         this.handleAnswer(data.from, data.answer);
       });
 
+      // CRITICAL: Handle existing participants when joining room
+      this.socket.on('room-participants', (participants: Array<{ userId: string; userName: string }>) => {
+        logger.info('Received existing participants:', participants);
+        // Connect to all existing participants
+        participants.forEach(participant => {
+          logger.info(`Connecting to existing participant: ${participant.userName} (${participant.userId})`);
+          this.onParticipantJoinedCallback?.(participant.userId, participant.userName);
+          // Initiate call to existing participant
+          setTimeout(() => {
+            this.initiateCall(participant.userId);
+          }, 500); // Small delay to ensure peer connection is ready
+        });
+      });
+
     } catch (error) {
       logger.error('Failed to initialize socket:', error);
     }
@@ -537,21 +551,46 @@ export class ModernWebRTCService {
   private joinRoom() {
     if (!this.socket || !this.config) return;
 
+    // Ensure we have a clean connection before joining
+    if (!this.socket.connected) {
+      logger.warn('Socket not connected, cannot join room');
+      return;
+    }
+
+    logger.info(`Joining room: ${this.config.roomId} as ${this.config.userName} (${this.config.userId})`);
+    
     this.socket.emit('join-room', {
       roomId: this.config.roomId,
       userId: this.config.userId,
-      userName: this.config.userName
+      userName: this.config.userName,
+      authToken: this.config.authToken,
+      sessionId: this.config.sessionId
     });
   }
 
   private async initiateCall(userId: string) {
-    if (!this.peer || !this.localStream) return;
+    if (!this.peer || this.peer.destroyed) {
+      logger.warn(`Cannot initiate call to ${userId}: peer not available`);
+      return;
+    }
+
+    if (!this.localStream) {
+      logger.warn(`Cannot initiate call to ${userId}: no local stream`);
+      return;
+    }
 
     try {
+      logger.info(`🔄 Initiating call to user: ${userId}`);
       const call = this.peer.call(userId, this.localStream);
-      this.handleOutgoingCall(call, userId);
+      
+      if (call) {
+        this.handleOutgoingCall(call, userId);
+        logger.info(`✅ Call initiated successfully to ${userId}`);
+      } else {
+        logger.error(`❌ Failed to create call to ${userId}`);
+      }
     } catch (error) {
-      logger.error('Failed to initiate call:', error);
+      logger.error(`Failed to initiate call to ${userId}:`, error);
     }
   }
 
@@ -776,9 +815,14 @@ export class ModernWebRTCService {
     if (!this.config) return;
 
     try {
+      logger.info('🔄 Handling tab return - checking connection status');
+
+      let needsReconnection = false;
+
       // Check socket connection first
       if (this.socket && !this.socket.connected) {
         logger.info('Socket disconnected while tab hidden - reconnecting...');
+        needsReconnection = true;
         this.socket.connect();
         
         // Wait for socket to connect before proceeding
@@ -800,10 +844,17 @@ export class ModernWebRTCService {
       // Check peer connection
       if (!this.peer || this.peer.destroyed || this.peer.disconnected) {
         logger.info('Peer connection lost while tab hidden - attempting to restore...');
+        needsReconnection = true;
         await this.handleReconnection();
       }
 
-      // Rejoin room if needed
+      // Only rejoin room if we actually had connection issues
+      if (needsReconnection && this.socket && this.socket.connected) {
+        logger.info('Rejoining room after reconnection');
+        this.joinRoom();
+      }
+
+      // Notify server that tab is visible (for grace period management)
       if (this.socket && this.socket.connected) {
         this.socket.emit('tab-visible', { 
           userId: this.config.userId,
