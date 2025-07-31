@@ -72,37 +72,37 @@ export default function VideoCall({ roomId, participants }: VideoCallProps) {
     setupWebRTCService();
 
     return () => {
-      // Check if this is a tab switch vs legitimate component unmount
+      // Don't cleanup during tab switches - just maintain connections
       if (isTabSwitchInProgress()) {
-        logger.info('📱 VideoCall cleanup prevented - tab switch detected');
-        quickMediaCleanup(); // Light cleanup for tab switches
+        logger.info('📱 VideoCall cleanup prevented - tab switch detected, maintaining connections');
         return;
       }
 
       // This is a legitimate component unmount - full cleanup
-      if (hasRequestedMedia) {
-        logger.info('🚪 VideoCall cleanup triggered - legitimate unmount');
-        
-        // Use comprehensive cleanup utility
-        forceMediaCleanup({
-          stopAllTracks: true,
-          clearVideoElements: false, // Let component handle its own elements
-          destroyWebRTC: false, // Don't destroy service here, let parent handle it
-          logDetails: false // Reduce log spam
-        }).catch(error => {
-          logger.warn('Error during VideoCall cleanup:', error);
-        });
-
+      logger.info('🚪 VideoCall cleanup triggered - legitimate component unmount');
+      
+      try {
         // Component-specific cleanup
         if (recorderRef.current) {
           recorderRef.current.stopRecording();
         }
         
-        // Leave WebRTC room
+        // Only clean up if we actually initialized media
+        if (hasRequestedMedia && localStream) {
+          localStream.getTracks().forEach(track => {
+            track.stop();
+            logger.debug('Stopped local track:', track.kind);
+          });
+        }
+        
+        // Leave WebRTC room (this handles peer cleanup)
         webRTCService.leaveRoom();
+        
+      } catch (error) {
+        logger.warn('Error during VideoCall cleanup:', error);
       }
     };
-  }, [roomId, user, isTabSwitchInProgress]); // Added isTabSwitchInProgress dependency
+  }, [roomId, user]); // Removed isTabSwitchInProgress to prevent re-renders
 
   // Monitor connection status
   useEffect(() => {
