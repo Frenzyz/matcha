@@ -7,6 +7,7 @@ import { ArrowLeft, Users, Trash2, Loader2 } from 'lucide-react';
 import { StudyRoom as StudyRoomType } from '../../types/study-room';
 import { logger } from '../../utils/logger';
 import { useTabSwitchProtection } from '../../hooks/useTabVisibility';
+import { forceMediaCleanup } from '../../utils/mediaCleanup';
 
 interface StudyRoomProps {
   roomId: string;
@@ -21,7 +22,7 @@ export default function StudyRoom({ roomId, onLeave }: StudyRoomProps) {
   const [error, setError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const { user } = useAuth();
-  const { isTabSwitchInProgress } = useTabSwitchProtection();
+  const { isTabSwitchInProgress, forceAllowAction } = useTabSwitchProtection();
 
   useEffect(() => {
     if (user) {
@@ -36,14 +37,39 @@ export default function StudyRoom({ roomId, onLeave }: StudyRoomProps) {
     }
   }, [user, isTabSwitchInProgress]);
 
-  // Protected leave function that prevents leaving during tab switches
+  // Enhanced leave function that handles both protection and legitimate user actions
   const handleLeave = () => {
-    if (isTabSwitchInProgress()) {
-      logger.info('Room leave prevented due to tab switch');
-      return;
-    }
-    logger.info('User leaving room - legitimate action');
+    logger.info('🚪 User initiating leave action');
+    
+    // This is a legitimate user action - override tab switch protection
+    forceAllowAction();
+    
+    logger.info('✅ User leaving room - legitimate action (protection overridden)');
+    
+    // Force cleanup of WebRTC and media streams before leaving
+    forceCleanupBeforeLeave();
+    
     onLeave();
+  };
+
+  // Force cleanup when user explicitly leaves (not tab switching)
+  const forceCleanupBeforeLeave = async () => {
+    try {
+      logger.info('🧹 Force cleanup initiated - user leaving room');
+      
+      // Use comprehensive media cleanup utility
+      await forceMediaCleanup({
+        stopAllTracks: true,
+        clearVideoElements: true,
+        destroyWebRTC: true,
+        logDetails: true
+      });
+      
+      logger.info('✅ Force cleanup completed - user ready to leave');
+    } catch (error) {
+      logger.error('❌ Error during force cleanup:', error);
+      // Continue with leaving even if cleanup fails
+    }
   };
 
   const loadRoom = async () => {

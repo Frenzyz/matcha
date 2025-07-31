@@ -725,6 +725,7 @@ export class ModernWebRTCService {
   }
 
   destroy() {
+    logger.info('🧹 WebRTC Service: Destroying all connections and resources');
     this.isDestroyed = true;
     
     // Stop connection monitoring
@@ -739,9 +740,54 @@ export class ModernWebRTCService {
       this.visibilityChangeHandler = undefined;
     }
     
+    // Force stop all local media streams
+    if (this.localStream) {
+      this.localStream.getTracks().forEach(track => {
+        track.stop();
+        logger.debug('🎥 Stopped local media track:', track.kind, track.label);
+      });
+      this.localStream = null;
+    }
+
+    // Close all participant connections and stop their streams
+    this.participants.forEach((participant, userId) => {
+      if (participant.stream) {
+        participant.stream.getTracks().forEach(track => track.stop());
+      }
+      if (participant.connection) {
+        participant.connection.close();
+      }
+      logger.debug('🔌 Closed connection for participant:', userId);
+    });
+    this.participants.clear();
+
+    // Reset all callbacks
+    this.onStreamAddedCallback = undefined;
+    this.onStreamRemovedCallback = undefined;
+    this.onParticipantJoinedCallback = undefined;
+    this.onParticipantLeftCallback = undefined;
+    
+    // Leave room and close peer connection
     this.leaveRoom();
-    this.socket?.disconnect();
-    this.socket = null;
+    
+    // Disconnect socket
+    if (this.socket) {
+      this.socket.disconnect();
+      this.socket = null;
+    }
+
+    // Reset security state
+    this.securityMetrics = null;
+    this.encryptionVerified = false;
+    this.trustedFingerprints.clear();
+
+    // Reset connection state
+    this.connectionState = 'new';
+    this.networkQuality = 'unknown';
+    this.connectionRetryCount = 0;
+    this.config = null;
+
+    logger.info('✅ WebRTC Service: Complete destruction finished');
   }
 
   // Public methods to get connection status
