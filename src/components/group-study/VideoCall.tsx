@@ -5,6 +5,7 @@ import { logger } from '../../utils/logger';
 import RecordRTC from 'recordrtc';
 import { webRTCService, ParticipantStream } from '../../services/modernWebRTC';
 import { useTabSwitchProtection } from '../../hooks/useTabVisibility';
+import { SecurityBadge } from '../SecurityStatus';
 
 interface VideoCallProps {
   roomId: string;
@@ -145,7 +146,10 @@ export default function VideoCall({ roomId, participants }: VideoCallProps) {
       const success = await webRTCService.initialize({
         roomId,
         userId: user.id,
-        userName: user.email || 'Anonymous'
+        userName: user.email || 'Anonymous',
+        // Add authentication tokens for security
+        authToken: user.access_token || 'dev-token',
+        sessionId: `session-${user.id}-${Date.now()}`
       });
 
       if (!success) {
@@ -453,23 +457,26 @@ export default function VideoCall({ roomId, participants }: VideoCallProps) {
       </div>
 
       {/* Connection Status - show when active */}
-      {isInitialized && (
-        <div className="flex justify-center items-center gap-2 mt-2 mb-2">
-          <div className={`w-2 h-2 rounded-full ${
-            connectionState === 'connected' ? 'bg-emerald-500' : 
-            connectionState === 'connecting' ? 'bg-yellow-500 animate-pulse' :
-            'bg-red-500'
-          }`} />
-          <span className={`text-xs font-medium ${
-            networkQuality === 'excellent' ? 'text-emerald-400' :
-            networkQuality === 'good' ? 'text-yellow-400' :
-            networkQuality === 'poor' ? 'text-orange-400' :
-            'text-gray-400'
-          }`}>
-            {connectionStatus}
-          </span>
-        </div>
-      )}
+             {isInitialized && (
+         <div className="flex justify-center items-center gap-4 mt-2 mb-2">
+           <div className="flex items-center gap-2">
+             <div className={`w-2 h-2 rounded-full ${
+               connectionState === 'connected' ? 'bg-emerald-500' : 
+               connectionState === 'connecting' ? 'bg-yellow-500 animate-pulse' :
+               'bg-red-500'
+             }`} />
+             <span className={`text-xs font-medium ${
+               networkQuality === 'excellent' ? 'text-emerald-400' :
+               networkQuality === 'good' ? 'text-yellow-400' :
+               networkQuality === 'poor' ? 'text-orange-400' :
+               'text-gray-400'
+             }`}>
+               {connectionStatus}
+             </span>
+           </div>
+           <SecurityBadge />
+         </div>
+       )}
 
       {/* Controls - only show when video call is active */}
       {isInitialized && (
