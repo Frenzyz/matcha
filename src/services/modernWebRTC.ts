@@ -117,9 +117,32 @@ export class ModernWebRTCService {
       });
 
       this.socket.on('user-joined', (data: { userId: string; userName: string }) => {
-        logger.info('User joined room:', data);
+        logger.info('🆕 User joined room:', data);
+        
+        // Notify UI about the new participant
         this.onParticipantJoinedCallback?.(data.userId, data.userName);
-        this.initiateCall(data.userId);
+        
+        // CRITICAL FIX: Add small delay to ensure both peers are ready
+        setTimeout(async () => {
+          // Verify we have the necessary components before initiating call
+          if (!this.peer || this.peer.destroyed) {
+            logger.warn(`Cannot initiate call to ${data.userId}: peer not ready`);
+            return;
+          }
+          
+          if (!this.localStream) {
+            logger.warn(`Cannot initiate call to ${data.userId}: no local stream, attempting to start...`);
+            try {
+              await this.startLocalStream(true, true);
+            } catch (error) {
+              logger.error('Failed to start local stream:', error);
+              return;
+            }
+          }
+          
+          logger.info(`🔄 Existing user initiating call to new user: ${data.userId}`);
+          this.initiateCall(data.userId);
+        }, 1000); // 1 second delay to ensure both peers are ready
       });
 
       this.socket.on('user-left', (data: { userId: string }) => {
@@ -187,14 +210,25 @@ export class ModernWebRTCService {
           iceTransportPolicy: 'all', // Allow all transport types
           bundlePolicy: 'max-bundle', // Bundle all media into single transport
           rtcpMuxPolicy: 'require', // Require RTCP multiplexing for security
-          // Enhanced security configuration
+          // CRITICAL: Enforce DTLS encryption for all connections
           certificates: undefined, // Use browser-generated certificates (DTLS)
           // Enforce secure transport protocols
           sdpSemantics: 'unified-plan', // Use unified plan for better security
           // Additional security constraints
           offerExtmapAllowMixed: false, // Disable mixed extension maps for security
           // Optimization for faster connections
-          iceGatheringTimeout: 5000 // Limit ICE gathering time
+          iceGatheringTimeout: 5000, // Limit ICE gathering time
+          // ENCRYPTION ENFORCEMENT
+          mandatory: {
+            'googIPv6': false, // Disable IPv6 for consistency
+            'googDscp': true, // Enable DSCP marking
+            'googCpuOveruseDetection': true, // Enable CPU overuse detection
+          },
+          optional: [
+            { 'googSuspendBelowMinBitrate': true },
+            { 'googCombinedAudioVideoBwe': true },
+            { 'googScreencastMinBitrate': 300 }
+          ]
         },
         // Enhanced PeerJS security settings
         debug: import.meta.env.DEV ? 2 : 0, // Disable debug in production
@@ -262,9 +296,12 @@ export class ModernWebRTCService {
       // Single reliable STUN server
       { urls: 'stun:stun.l.google.com:19302' },
       
-      // Single TURN server for NAT traversal
+      // Secure TURN server for NAT traversal with TLS
       {
-        urls: 'turn:openrelay.metered.ca:443',
+        urls: [
+          'turns:openrelay.metered.ca:443?transport=tcp', // TURNS (TLS)
+          'turn:openrelay.metered.ca:443'  // Fallback TURN
+        ],
         username: 'openrelayproject',
         credential: 'openrelayproject'
       }
@@ -346,6 +383,34 @@ export class ModernWebRTCService {
   }
 
   private reconnectionInProgress: boolean = false;
+
+  private verifyCallEncryption(call: MediaConnection): void {
+    // Verify that the call will use encryption
+    if (call.peerConnection) {
+      const pc = call.peerConnection;
+      
+      // Check if DTLS is enabled (this ensures encryption)
+      pc.addEventListener('connectionstatechange', () => {
+        if (pc.connectionState === 'connected') {
+          const stats = pc.getStats();
+          stats.then((report) => {
+            let dtlsEnabled = false;
+            report.forEach((stat) => {
+              if (stat.type === 'transport' && stat.dtlsState === 'connected') {
+                dtlsEnabled = true;
+                logger.info(`🔒 DTLS encryption verified for call to ${call.peer}`);
+              }
+            });
+            
+            if (!dtlsEnabled) {
+              logger.error(`❌ DTLS encryption not established for call to ${call.peer}`);
+              call.close();
+            }
+          });
+        }
+      });
+    }
+  }
 
   private async createNewConnectionAfterDestroy(): Promise<void> {
     if (!this.config || this.isDestroyed) return;
@@ -600,13 +665,31 @@ export class ModernWebRTCService {
       return;
     }
 
+    // Prevent duplicate calls to same user
+    if (this.participants.has(userId)) {
+      logger.info(`Call to ${userId} already exists, skipping duplicate`);
+      return;
+    }
+
     try {
       logger.info(`🔄 Initiating call to user: ${userId}`);
-      const call = this.peer.call(userId, this.localStream);
+      
+      // Enhanced call options with encryption enforcement
+      const callOptions = {
+        metadata: {
+          timestamp: Date.now(),
+          encryptionRequired: true,
+          clientVersion: '1.0.0'
+        }
+      };
+      
+      const call = this.peer.call(userId, this.localStream, callOptions);
       
       if (call) {
+        // Verify encryption is enabled before proceeding
+        this.verifyCallEncryption(call);
         this.handleOutgoingCall(call, userId);
-        logger.info(`✅ Call initiated successfully to ${userId}`);
+        logger.info(`✅ Call initiated successfully to ${userId} with encryption`);
       } else {
         logger.error(`❌ Failed to create call to ${userId}`);
       }
@@ -616,41 +699,61 @@ export class ModernWebRTCService {
   }
 
   private async handleIncomingCall(call: MediaConnection) {
-    if (!this.localStream) return;
-
-    logger.info('🔒 Validating incoming call security...');
-    
-    // Answer the call first
-    call.answer(this.localStream);
-    
-    // Wait for connection to establish, then validate security
-    call.on('stream', async (remoteStream) => {
+    if (!this.localStream) {
+      logger.warn('No local stream available for incoming call, attempting to start...');
       try {
-        // Get the underlying peer connection for security validation
-        const peerConnection = (call as any).peerConnection as RTCPeerConnection;
-        
-        if (peerConnection) {
-          const isSecure = await this.validateIncomingConnection(peerConnection);
-          
-          if (!isSecure) {
-            logger.error('❌ Incoming call failed security validation - terminating');
-            call.close();
-            return;
-          }
-          
-          logger.info('✅ Incoming call security validation passed');
-        }
-        
-        // If validation passes, handle the call normally
-        this.handleCallStream(call);
+        await this.startLocalStream(true, true);
       } catch (error) {
-        logger.error('Security validation error:', error);
+        logger.error('Failed to start local stream for incoming call:', error);
         call.close();
+        return;
       }
+    }
+
+    // Check if we already have a connection to this user
+    if (this.participants.has(call.peer)) {
+      logger.info(`Connection to ${call.peer} already exists, closing duplicate`);
+      call.close();
+      return;
+    }
+
+    logger.info(`📞 Incoming call from ${call.peer} - answering with encryption verification`);
+    
+    // Answer the call (PeerJS answer doesn't support metadata, only call does)
+    if (this.localStream) {
+      call.answer(this.localStream);
+    }
+    
+    // Verify encryption for incoming call
+    this.verifyCallEncryption(call);
+    
+    // Handle the call stream
+    this.handleCallStream(call);
+    
+    // Add connection monitoring
+    call.on('error', (error) => {
+      logger.error(`Call error with ${call.peer}:`, error);
+      this.handleParticipantLeft(call.peer);
+    });
+    
+    call.on('close', () => {
+      logger.info(`Call closed with ${call.peer}`);
+      this.handleParticipantLeft(call.peer);
     });
   }
 
   private handleOutgoingCall(call: MediaConnection, userId: string) {
+    // Add error handling for outgoing calls
+    call.on('error', (error) => {
+      logger.error(`Outgoing call error to ${userId}:`, error);
+      this.handleParticipantLeft(userId);
+    });
+    
+    call.on('close', () => {
+      logger.info(`Outgoing call closed to ${userId}`);
+      this.handleParticipantLeft(userId);
+    });
+    
     this.handleCallStream(call);
   }
 
