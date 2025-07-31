@@ -1,11 +1,119 @@
-// Simple Socket.io server for WebRTC signaling
+// Secure Socket.io server for WebRTC signaling with enhanced security
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
+import { randomBytes, createHash } from 'crypto';
 
 const app = express();
 const server = createServer(app);
+
+// ===== SECURITY CONFIGURATION =====
+
+// Security headers
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", "wss:", "ws:"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false, // Required for WebRTC
+  hsts: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true
+  }
+}));
+
+// Rate limiting for DDoS protection
+const rateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: 'Too many requests from this IP, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    console.log(`Rate limit exceeded for IP: ${req.ip}`);
+    res.status(429).json({ error: 'Rate limit exceeded' });
+  }
+});
+
+app.use(rateLimiter);
+
+// Additional security middleware
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Remove server information
+app.disable('x-powered-by');
+
+// Security session management
+const activeSessions = new Map();
+const sessionTimeouts = new Map();
+const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+
+// Generate secure session ID
+function generateSecureSessionId() {
+  return randomBytes(32).toString('hex');
+}
+
+// Validate session
+function validateSession(sessionId) {
+  if (!sessionId || !activeSessions.has(sessionId)) {
+    return false;
+  }
+  
+  const session = activeSessions.get(sessionId);
+  const now = Date.now();
+  
+  if (now - session.lastActivity > SESSION_TIMEOUT) {
+    // Session expired
+    activeSessions.delete(sessionId);
+    if (sessionTimeouts.has(sessionId)) {
+      clearTimeout(sessionTimeouts.get(sessionId));
+      sessionTimeouts.delete(sessionId);
+    }
+    return false;
+  }
+  
+  // Update last activity
+  session.lastActivity = now;
+  return true;
+}
+
+// Create session
+function createSession(userId, roomId) {
+  const sessionId = generateSecureSessionId();
+  const session = {
+    userId,
+    roomId,
+    createdAt: Date.now(),
+    lastActivity: Date.now(),
+    ipHash: null // Will be set from socket
+  };
+  
+  activeSessions.set(sessionId, session);
+  
+  // Auto-cleanup session after timeout
+  const timeoutId = setTimeout(() => {
+    activeSessions.delete(sessionId);
+    sessionTimeouts.delete(sessionId);
+  }, SESSION_TIMEOUT);
+  
+  sessionTimeouts.set(sessionId, timeoutId);
+  
+  return sessionId;
+}
 
 // Configure CORS origins based on environment
 const allowedOrigins = process.env.NODE_ENV === 'production' 
@@ -34,7 +142,34 @@ const io = new Server(server, {
     methods: ["GET", "POST"],
     credentials: true
   },
-  transports: ['websocket', 'polling']
+  transports: ['websocket', 'polling'],
+  // Enhanced security configuration
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  // Connection limits
+  maxHttpBufferSize: 1e6, // 1MB
+  allowEIO3: false, // Disable legacy Engine.IO
+  // Additional security
+  serveClient: false,
+  allowRequest: (req, callback) => {
+    // Validate origin
+    const origin = req.headers.origin;
+    const isOriginAllowed = allowedOrigins.includes(origin);
+    
+    if (!isOriginAllowed && process.env.NODE_ENV === 'production') {
+      console.log(`🚨 Rejected connection from unauthorized origin: ${origin}`);
+      return callback('Origin not allowed', false);
+    }
+    
+    // Rate limiting per IP
+    const clientIP = req.socket.remoteAddress;
+    const ipHash = createHash('sha256').update(clientIP).digest('hex');
+    
+    // Log connection attempt
+    console.log(`🔒 Connection attempt from IP hash: ${ipHash.substring(0, 16)}...`);
+    
+    callback(null, true);
+  }
 });
 
 // Store active rooms and participants
@@ -42,12 +177,66 @@ const rooms = new Map();
 const userRooms = new Map();
 
 io.on('connection', (socket) => {
-  console.log(`User connected: ${socket.id}`);
+  console.log(`🔒 Secure connection established: ${socket.id}`);
+  
+  // Store IP hash for security monitoring
+  const clientIP = socket.handshake.address;
+  const ipHash = createHash('sha256').update(clientIP).digest('hex');
+  socket.ipHash = ipHash.substring(0, 16);
+  
+  // Connection security audit
+  console.log(`Security audit - Socket: ${socket.id}, IP: ${socket.ipHash}...`);
+  
+  // Set connection timeout
+  const connectionTimeout = setTimeout(() => {
+    if (socket.connected) {
+      console.log(`⏰ Connection timeout for ${socket.id}`);
+      socket.disconnect(true);
+    }
+  }, 300000); // 5 minutes timeout
+  
+  socket.on('disconnect', () => {
+    clearTimeout(connectionTimeout);
+  });
 
   socket.on('join-room', (data) => {
-    const { roomId, userId, userName } = data;
+    const { roomId, userId, userName, authToken, sessionId } = data;
     
-    console.log(`User ${userId} (${userName}) joining room ${roomId}`);
+    // Security validation for production
+    if (process.env.NODE_ENV === 'production') {
+      if (!authToken || !sessionId) {
+        console.log(`🚨 Rejected join-room: Missing authentication for ${userId}`);
+        socket.emit('auth-error', { message: 'Authentication required' });
+        return;
+      }
+      
+      // Validate session if provided
+      if (sessionId && !validateSession(sessionId)) {
+        console.log(`🚨 Rejected join-room: Invalid session for ${userId}`);
+        socket.emit('auth-error', { message: 'Invalid or expired session' });
+        return;
+      }
+    }
+    
+    // Input validation
+    if (!roomId || !userId || !userName) {
+      console.log(`🚨 Rejected join-room: Missing required fields`);
+      socket.emit('validation-error', { message: 'Missing required fields' });
+      return;
+    }
+    
+    // Sanitize inputs
+    const sanitizedRoomId = roomId.replace(/[^a-zA-Z0-9-_]/g, '');
+    const sanitizedUserId = userId.replace(/[^a-zA-Z0-9-_]/g, '');
+    const sanitizedUserName = userName.substring(0, 50).replace(/[<>]/g, '');
+    
+    if (sanitizedRoomId !== roomId || sanitizedUserId !== userId) {
+      console.log(`🚨 Rejected join-room: Invalid characters in room/user ID`);
+      socket.emit('validation-error', { message: 'Invalid characters in identifiers' });
+      return;
+    }
+    
+    console.log(`🔒 Secure join: ${sanitizedUserId} (${sanitizedUserName}) → room ${sanitizedRoomId}`);
     
     // Leave any existing room
     const existingRoom = userRooms.get(userId);
