@@ -4,10 +4,6 @@ import { useAuth } from '../../context/AuthContext';
 import { logger } from '../../utils/logger';
 import RecordRTC from 'recordrtc';
 import { webRTCService, ParticipantStream } from '../../services/modernWebRTC';
-import { useTabSwitchProtection } from '../../hooks/useTabVisibility';
-import { useSimpleConnectionMonitor } from '../../hooks/useSimpleConnectionMonitor';
-import { SecurityBadge } from '../SecurityStatus';
-import { forceMediaCleanup, quickMediaCleanup } from '../../utils/mediaCleanup';
 
 interface VideoCallProps {
   roomId: string;
@@ -16,9 +12,6 @@ interface VideoCallProps {
 
 export default function VideoCall({ roomId, participants }: VideoCallProps) {
   const { user } = useAuth();
-  const { status: connectionMonitorStatus, setConnected } = useSimpleConnectionMonitor();
-  const { isTabSwitchInProgress, isVisible, timeHidden } = useTabSwitchProtection();
-  // Removed duplicate line
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
   const [videoEnabled, setVideoEnabled] = useState(true);
@@ -29,12 +22,7 @@ export default function VideoCall({ roomId, participants }: VideoCallProps) {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isJoiningRoom, setIsJoiningRoom] = useState(false);
   const [hasRequestedMedia, setHasRequestedMedia] = useState(false);
-  const [connectionHealth, setConnectionHealth] = useState({ isHealthy: true, healthyConnections: 0, totalConnections: 0 });
   const [remoteParticipants, setRemoteParticipants] = useState<ParticipantStream[]>([]);
-  const [connectionState, setConnectionState] = useState<RTCPeerConnectionState>('new');
-  const [networkQuality, setNetworkQuality] = useState<'excellent' | 'good' | 'poor' | 'unknown'>('unknown');
-  const [retryCount, setRetryCount] = useState(0);
-  const [connectionStatus, setConnectionStatus] = useState<string>('Ready to connect');
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const screenVideoRef = useRef<HTMLVideoElement>(null);
   const recorderRef = useRef<RecordRTC | null>(null);
@@ -47,19 +35,10 @@ export default function VideoCall({ roomId, participants }: VideoCallProps) {
 
       // Setup event handlers
       webRTCService.onStreamAdded((participant) => {
-        logger.info('🎉 VideoCall: Stream added for participant:', participant.userId);
-        logger.info('🎥 Stream details:', {
-          videoTracks: participant.stream.getVideoTracks().length,
-          audioTracks: participant.stream.getAudioTracks().length,
-          streamId: participant.stream.id
-        });
+        logger.info('Stream added for participant:', participant.userId);
         setRemoteParticipants(prev => {
           const existing = prev.find(p => p.userId === participant.userId);
-          if (existing) {
-            logger.warn(`⚠️ Participant ${participant.userId} already exists in remoteParticipants`);
-            return prev;
-          }
-          logger.info(`✅ Adding ${participant.userId} to remoteParticipants. Total will be: ${prev.length + 1}`);
+          if (existing) return prev;
           return [...prev, participant];
         });
       });
@@ -81,80 +60,20 @@ export default function VideoCall({ roomId, participants }: VideoCallProps) {
     setupWebRTCService();
 
     return () => {
-      // Don't cleanup during tab switches - just maintain connections
-      if (isTabSwitchInProgress()) {
-        logger.info('📱 VideoCall cleanup prevented - tab switch detected, maintaining connections');
-        return;
-      }
-
-      // This is a legitimate component unmount - full cleanup
-      logger.info('🚪 VideoCall cleanup triggered - legitimate component unmount');
-      
-      try {
-        // Component-specific cleanup
+      if (hasRequestedMedia) {
+        webRTCService.leaveRoom();
+        if (localStream) {
+          localStream.getTracks().forEach(track => track.stop());
+        }
+        if (screenStream) {
+          screenStream.getTracks().forEach(track => track.stop());
+        }
         if (recorderRef.current) {
           recorderRef.current.stopRecording();
         }
-        
-        // Only clean up if we actually initialized media
-        if (hasRequestedMedia && localStream) {
-          localStream.getTracks().forEach(track => {
-            track.stop();
-            logger.debug('Stopped local track:', track.kind);
-          });
-        }
-        
-        // Leave WebRTC room (this handles peer cleanup)
-        webRTCService.leaveRoom();
-        
-      } catch (error) {
-        logger.warn('Error during VideoCall cleanup:', error);
       }
     };
-  }, [roomId, user]); // Removed isTabSwitchInProgress to prevent re-renders
-
-  // Monitor connection status
-  useEffect(() => {
-    if (!isInitialized) return;
-
-    const statusInterval = setInterval(() => {
-      const state = webRTCService.getConnectionState();
-      const quality = webRTCService.getNetworkQuality();
-      const retries = webRTCService.getConnectionRetryCount();
-
-      setConnectionState(state);
-      setNetworkQuality(quality);
-      setRetryCount(retries);
-
-      // Update connection status message
-      let status = 'Connected';
-      if (state === 'connecting') {
-        status = retries > 0 ? `Reconnecting... (attempt ${retries + 1})` : 'Connecting...';
-      } else if (state === 'disconnected') {
-        status = 'Disconnected - attempting to reconnect...';
-      } else if (state === 'failed') {
-        status = 'Connection failed';
-      } else if (state === 'connected') {
-        switch (quality) {
-          case 'excellent':
-            status = 'Connected - Excellent quality';
-            break;
-          case 'good':
-            status = 'Connected - Good quality';
-            break;
-          case 'poor':
-            status = 'Connected - Poor quality';
-            break;
-          default:
-            status = 'Connected';
-        }
-      }
-
-      setConnectionStatus(status);
-    }, 1000);
-
-    return () => clearInterval(statusInterval);
-  }, [isInitialized]);
+  }, [roomId, user, hasRequestedMedia, localStream, screenStream]);
 
   const joinVideoRoom = async () => {
     if (!user || isInitialized || isJoiningRoom) return;
@@ -162,29 +81,41 @@ export default function VideoCall({ roomId, participants }: VideoCallProps) {
     try {
       setIsJoiningRoom(true);
       setError(null);
-      setConnectionStatus('Connecting...');
       logger.info('Joining video room...');
 
-      // Initialize WebRTC service (now with built-in robust retry logic)
-      const success = await webRTCService.initialize({
-        roomId,
-        userId: user.id,
-        userName: user.email || 'Anonymous',
-        // Add authentication tokens for security
-        authToken: user.access_token || `dev-token-${Date.now()}`,
-        sessionId: `session-${user.id.replace(/[^a-zA-Z0-9-]/g, '')}-${Date.now()}`
-      });
+      // Initialize WebRTC service with retries
+      let success = false;
+      let attempts = 0;
+      const maxAttempts = 3;
 
-      if (!success) {
-        throw new Error('Failed to initialize WebRTC service');
+      while (!success && attempts < maxAttempts) {
+        attempts++;
+        try {
+          success = await Promise.race([
+            webRTCService.initialize({
+              roomId,
+              userId: user.id,
+              userName: user.email || 'Anonymous'
+            }),
+            new Promise<boolean>((_, reject) => 
+              setTimeout(() => reject(new Error('Connection timeout')), 5000)
+            )
+          ]);
+        } catch (attemptError) {
+          logger.warn(`WebRTC init attempt ${attempts} failed:`, attemptError);
+          if (attempts === maxAttempts) throw attemptError;
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
+        }
       }
 
-      setConnectionStatus('Acquiring media...');
+      if (!success) {
+        throw new Error('Failed to initialize WebRTC service after multiple attempts');
+      }
 
-      // Start local stream (now with adaptive quality and fallback)
+      // Start local stream
       const stream = await webRTCService.startLocalStream(videoEnabled, audioEnabled);
       if (!stream) {
-        throw new Error('Failed to access camera/microphone. Please check permissions and try again.');
+        throw new Error('Failed to access camera/microphone. Please check permissions.');
       }
 
       setLocalStream(stream);
@@ -201,17 +132,12 @@ export default function VideoCall({ roomId, participants }: VideoCallProps) {
       }
 
       setIsInitialized(true);
-      setConnectionStatus('Connected successfully');
-      setConnected(true);
-      
       logger.info('Successfully joined video room');
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to join video room';
       logger.error('Video room join error:', err);
       setError(errorMessage);
-      setConnectionStatus('Connection failed');
-      setConnected(false);
     } finally {
       setIsJoiningRoom(false);
     }
@@ -219,18 +145,10 @@ export default function VideoCall({ roomId, participants }: VideoCallProps) {
 
   // Update remote video elements when participants change
   useEffect(() => {
-    logger.info(`🔄 VideoCall: remoteParticipants changed. Count: ${remoteParticipants.length}`);
-    remoteParticipants.forEach((participant, index) => {
-      logger.info(`📹 Processing participant ${index + 1}: ${participant.userId}`);
+    remoteParticipants.forEach((participant) => {
       const videoElement = remoteVideoRefs.current.get(participant.userId);
       if (videoElement && participant.stream) {
-        logger.info(`✅ Setting srcObject for ${participant.userId}`);
         videoElement.srcObject = participant.stream;
-      } else {
-        logger.warn(`❌ Missing video element or stream for ${participant.userId}:`, {
-          hasVideoElement: !!videoElement,
-          hasStream: !!participant.stream
-        });
       }
     });
   }, [remoteParticipants]);
@@ -367,20 +285,15 @@ export default function VideoCall({ roomId, participants }: VideoCallProps) {
             </div>
           )}
           
-          {/* Loading/Connection state */}
-          {isJoiningRoom && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center text-white">
-                <Users size={48} className="mx-auto mb-2 opacity-50 animate-pulse" />
-                <p className="text-sm font-medium">{connectionStatus}</p>
-                {retryCount > 0 && (
-                  <p className="text-xs text-yellow-400 mt-1">
-                    Retry attempt {retryCount}/5
-                  </p>
-                )}
+                      {/* Loading state */}
+            {isJoiningRoom && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="text-center text-white">
+                  <Users size={48} className="mx-auto mb-2 opacity-50 animate-pulse" />
+                  <p className="text-sm">Connecting to video call...</p>
+                </div>
               </div>
-            </div>
-          )}
+            )}
           
           {/* Error state */}
           {error && !isJoiningRoom && (
@@ -490,31 +403,9 @@ export default function VideoCall({ roomId, participants }: VideoCallProps) {
         )}
       </div>
 
-      {/* Connection Status - show when active */}
-             {isInitialized && (
-         <div className="flex justify-center items-center gap-4 mt-2 mb-2">
-           <div className="flex items-center gap-2">
-             <div className={`w-2 h-2 rounded-full ${
-               connectionState === 'connected' ? 'bg-emerald-500' : 
-               connectionState === 'connecting' ? 'bg-yellow-500 animate-pulse' :
-               'bg-red-500'
-             }`} />
-             <span className={`text-xs font-medium ${
-               networkQuality === 'excellent' ? 'text-emerald-400' :
-               networkQuality === 'good' ? 'text-yellow-400' :
-               networkQuality === 'poor' ? 'text-orange-400' :
-               'text-gray-400'
-             }`}>
-               {connectionStatus}
-             </span>
-           </div>
-           <SecurityBadge />
-         </div>
-       )}
-
       {/* Controls - only show when video call is active */}
       {isInitialized && (
-        <div className="flex justify-center gap-4 mt-2">
+        <div className="flex justify-center gap-4 mt-4">
           <button
             onClick={toggleScreenShare}
             className={`p-2 rounded-full ${
